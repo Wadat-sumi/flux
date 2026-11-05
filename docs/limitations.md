@@ -10,7 +10,9 @@ Flux is an educational experimentation tool, not a calibrated or validated forec
 - Boundary transfers omit several metres of junction traversal; no swept-body geometry safety guarantee.
 - Artificial timeout rejection resolves gridlock and is surfaced in warnings.
 - Finite observation horizons censor unfinished trips. Completed-trip averages alone can favor a heavily congested scenario, so active/rejected counts must be shown.
-- Browser performance and 60 FPS rendering have not yet been measured. A headless benchmark is distinct evidence.
-- Application UI, editor, browser persistence and live Azure deployment are pending the required design choice and deployment credentials.
+- Browser performance has been measured on one macOS arm64 machine in Chromium with 544–552 moving agents. The benchmark does not guarantee the same FPS on every device, maximum allowed graph or background tab. Rendering and numerical physics are decoupled; overloaded wall-clock playback slows without changing the numerical step.
+- Road and vehicle widths are visually exaggerated. Decorative blocks are illustrative and may be hidden; they are not GIS geometry.
+- Local saves are per browser origin, bounded to 12 scenarios and 4 MB. They do not sync across devices or from localhost to Azure; use JSON export/import.
+- Live Azure authentication, infrastructure plan/apply, public deployment and live-host header checks are deferred to the joint review on 6 November 2026. Local QA host checks do not prove Azure enforcement.
 
 No raw session log is committed. The original initial-header requirement is not literally satisfied by the log's environment-context first message; see the progress record.

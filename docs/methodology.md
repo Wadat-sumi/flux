@@ -45,3 +45,9 @@ For a vehicle ready at a junction, a blocked downstream insertion starts a deter
 ## Metrics
 
 Completed-trip travel time includes source waiting. Waiting time accumulates at speed below 0.5 m/s, plus source waiting. Delay is max(0, completed travel time minus route free-flow time at that driver's desired speed). Travel/wait/delay averages use completed trips only. Mean speed averages moving agents including stopped agents; pending source trips are excluded. Queue length counts stopped moving agents plus pending agents. Edge occupancy is total vehicle body length / (edge length × lane count), not a detector occupancy. Congestion speed ratio is mean edge speed / posted limit, capped at one; empty roads use ratio one. Throughput is cumulative completed trips/hour over elapsed observation time. History samples once per simulated second. These definitions must appear in UI help/legends and exports.
+
+## Rendering and comparative charts
+
+Canvas uses a plan or invertible isometric transform of the same graph. Road widths, lane spacing and car glyphs are exaggerated for readability, while the engine retains the operational dimensions. Flyovers are depth-ordered above the ground; labels show L0, elevated layers and ramp endpoint transitions. Layer visibility and city context affect drawing only. Vehicle positions interpolate between transferred snapshots only when vehicle ID and edge agree; road transfers snap to the new edge. Reduced motion draws the current state directly. No rendered position is fed back into the engine.
+
+Time-series samples are numerical observations from the worker. Paired throughput charts use a common y-axis maximum, as do paired completed-travel-time charts, and both have the same observation horizon. Numeric current values and axis maxima accompany the drawings. The comparison table reports raw changes without assuming that every increase/decrease is desirable.

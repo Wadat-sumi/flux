@@ -31,22 +31,22 @@
 - [x] Terraform scaffold initialized, formatted and validated.
 - [ ] Skeleton Azure deployment: owner deferred joint Azure review to 6 November; hour-24 target is 6 November 22:22 IST.
 - [x] Three original static SVG proposals and reference study.
-- [ ] Owner design choice, required before application UI code.
-- [ ] UI, network editor, canvas, metrics and experiment comparison.
-- [ ] Full validation, E2E and performance evidence.
+- [x] Owner chose C — Layered City before UI code; recorded in design.md and ADR 003.
+- [x] Layered City UI, network editor, ramps/signals/demand forms, live canvas/metrics, save/load, and paired experiments.
+- [x] Local validation: 106 headless tests + 12 built-app browser tests + 2 isolated worker browser tests. Rendered 500+ agent benchmark recorded.
 - [ ] Final Azure deployment, docs, clean tree and remote SHA verification.
 
 ## Current work
 
-Finish the verified pre-UI milestone and present the three designs. No application UI component/layout/style code has been written. The review SVG drawings are explicit design-gate deliverables.
+Local application implementation and verification are complete. Publish the tested UI milestone, preserve the local preview for review, and complete Azure authentication/provisioning/deployment jointly on 6 November.
 
 ## Blockers
 
-The owner explicitly deferred Azure login/deployment to a joint review on 6 November. Do not request credentials or provision before that review. Design choice is the remaining required user decision before app UI. Literal initial-header compliance cannot be repaired in this session.
+The owner explicitly deferred Azure login/deployment to a joint review on 6 November. Do not request credentials or provision before that review. The design gate is complete and there are no remaining local implementation blockers. Literal initial-header compliance cannot be repaired in this session.
 
 ## Verification
 
-80 headless/unit/integration/boundary/performance/adversarial tests passed. Type checking and lint passed. Production worker-only build passed; two Chromium worker integration/adversarial tests passed. Headless benchmark: 544–599 moving agents, 5,451.8 packed ticks/s, p95 0.2224 ms. Terraform fmt/validate passed. No full app build, rendered FPS or Azure deployment is claimed. See testing.md and security.md for exact limits.
+106 headless/unit/integration/boundary/performance/adversarial tests, 12 built-app browser tests and 2 isolated worker browser tests pass. Type checking, lint, full build and credential-pattern scan pass. Real app: 544–552 moving agents, 60 canvas FPS, 30.18 simulation ticks/s, p95 frame 16.80 ms. Terraform fmt/validate pass; Azure plan/apply/deployment remain deferred. See testing.md and security.md for scope.
 
 ## Session events
 
@@ -60,3 +60,10 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Verified all three supplied design references visually; used only observed frames and owner-provided palette facts. Original static design mockups generated and visually reviewed.
 - User steering: defer Azure deployment to 6 November; require positive/negative/edge unit tests, integration, performance and penetration/security checks, OWASP consideration and AI guardrails; do not commit code without running those checks. These requirements are now documented in testing.md/security.md and govern all subsequent commits.
 - Latest clock update: 2026-11-05T22:51:17.894729+05:30. Elapsed 0.49 h; 71.51 h to hard deadline; 59.51 h to internal target.
+
+- Owner chose C (“Lets go with C”); the ADR/design record was updated before creating UI source files. No other coding agents used.
+- Implemented original Canvas city/roads/vehicles, explicit layer/ramp labels, plan editing, signals, demand controls, validated persistence, real metrics and paired results.
+- 23:23–23:24 IST: final full type/lint/build/headless/browser/security/performance gate passed, including shared chart-scale assertions. No UI code was checked in before these tests ran.
+- Local browser performance: 60 FPS with 544–552 moving agents and 30.18 numerical ticks/s. Raw reproducible measurements in docs/benchmarks/browser.json.
+- Temporary QA servers stop automatically. The local Vite preview remains available for the owner's review; it is not a public deployment.
+- Updated clock: 2026-11-05T23:29:08.687530+05:30; elapsed 1.12 h, 70.88 h to hard deadline and 58.88 h to internal target.

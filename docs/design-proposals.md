@@ -145,3 +145,7 @@ Strengths: closest to verified references, clearest visual story for flyovers, a
 Recommend **C**, with its built-in plan view for editing, because it matches the owner's reference and makes the project's distinctive flyover rule visible. This is one direction with two camera modes, not an extra proposal. A is best for maximum telemetry density; B is best for continuous technical editing.
 
 The owner must choose A, B, C or a stated hybrid and provide any change requests. The 72-hour clock continues while the gate is pending. The decision will be recorded in decisions.md and design.md before application UI implementation. Azure deployment is separately deferred by the owner to 6 November.
+
+## Gate outcome
+
+The owner selected C on 5 November 2026 (“Lets go with C”). The decision was recorded before any app UI file was written. The original three SVG proposals remain unchanged; the implementation and deviations are documented in design.md.

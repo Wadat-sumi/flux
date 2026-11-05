@@ -1,38 +1,53 @@
 # Flux testing
 
-The owner requires positive/negative/boundary unit tests, integration tests, performance tests and security/penetration checks to run before code is committed. Browser UI tests will additionally gate UI commits after the design choice. Current evidence applies to the headless engine, schema, worker and Terraform, not to an application UI or live Azure deployment.
+Every code commit requires positive/negative/boundary unit tests, integration, performance and security checks. UI commits additionally require production-build browser tests. The current local application passes this gate. Azure verification is separately deferred by the owner.
 
-## Verified on 5 November 2026
+## Latest verified milestone, 5 November 2026
 
-Environment: macOS arm64, 10 logical CPUs, 24 GiB RAM, Node 24.12.0. Exact dependencies are locked. No other coding agents were used.
+Environment: macOS arm64, 10 logical CPUs, 24 GiB RAM, Node 24.12.0, TypeScript 6.0.3, Vite 8.3.6, Playwright 1.64.1. Application tests use full Chromium's new headless mode; the isolated worker tests also pass in Chromium headless shell. No other coding agents were used.
 
-| Command | Result |
+| Check | Result |
 |---|---|
-| `npm run typecheck` | Passed, TypeScript 6.0.3. |
-| `npm run lint` | Passed, ESLint 10.14.0 with TypeScript rules. |
-| `npm test` | 80 tests passed across six files; latest full run 22:46 IST, about 0.94 s total. |
-| `npm run test:unit` | Included in full run: 35 engine/boundary cases, including ten named scientific requirements. |
-| `npm run test:integration` | Included in full run: 11 integration/transport cases. |
-| `npm run test:performance` | Included in full run: 500+ moving agents, 30+ packed ticks/s threshold passed. |
-| `npm run test:security` | Included in full run: 33 adversarial/security cases. See security.md for scope. |
-| `npm run build:worker` | Passed; actual module worker production bundle 132.07 kB (33.23 kB gzip). |
-| `npm run test:browser-worker` | 2 Chromium tests passed in 3.2 s; real ping/pong, rejected eval command, typed snapshots, 500+ agents, finite state, conservation and reset. |
-| `npm run benchmark` | 544→599 moving agents over 900 measured steps; 5,451.8 packed ticks/s, p95 0.2224 ms. See benchmarks/headless.json. |
-| `npm audit` after patched override | 0 known vulnerabilities reported at installation. |
-| `npm run secrets:check` | Passed heuristic credential scan without printing secret values. |
-| `terraform init -backend=false -input=false` | Passed, signed azurerm 4.6.0 provider and lockfile. |
-| `terraform fmt -check` | Passed. |
-| `terraform validate` | Passed. |
+| TypeScript / ESLint | Passed. |
+| Full headless suite | **106 passed** across seven files; latest run 23:23 IST, about 0.98 s total. |
+| Unit cases | 61 engine, boundaries, editor, camera and persistence cases, including ten named scientific requirements. |
+| Integration / worker transport | 11 cases, including complete preset observations, comparison, reset and cancellation. |
+| Headless performance regression | Passed with 500+ moving agents and a 30+ packed-ticks/s threshold. |
+| Core adversarial security | 33 cases; see security.md for exact scope. |
+| Production application build | Passed: main JS about 359.8 kB (109.8 kB gzip), CSS 18.5 kB (5.1 kB gzip), module worker 105.6 kB. |
+| Application E2E / security / rendering | **12 passed** in 27.7 s; no UI code committed before this gate passed. |
+| Isolated real browser worker | **2 passed** in 1.4 s after a successful worker-only production build. |
+| Credential-pattern scan | Passed on tracked/nonignored text and all six built text artifacts; paths only, no secret values printed. |
+| Dependency audit | Zero known vulnerabilities after the patched minimatch override; rechecked before push. |
+| Terraform format / validation | Passed, signed pinned azurerm 4.6.0. No Azure plan/apply run. |
 
-Test counts by file: engine 18; boundaries 17; integration 7; worker 4; performance 1; security 33. Total 80.
+Total distinct automated cases: **120** (106 headless + 12 application browser + 2 isolated browser worker). File counts within the 106: engine 18, boundaries 17, UI model 26, integration 7, worker 4, performance 1, security 33.
+
+## Browser workflow evidence
+
+The built dist/ artifact is served by a loopback-only QA server that applies the declared Static Web Apps headers. Tests exercise all three mandatory presets, play/pause/speed/step/reset, detailed metrics and conservation, coordinate node creation, elevation-to-ramp semantics, connection, lane changes, road/node deletion, undo, scenario settings, file download/import, saved-library reload, paired experiments and report export, keyboard navigation/dialog Escape, tablet (834×1112) and phone (390×844) layouts without horizontal overflow.
+
+Security browser cases cover stored/imported HTML and instruction strings, absence of attacker-origin requests, malformed/negative/prototype-pollution/oversized imports, storage corruption and recovery, actual inline-script blocking by CSP, declared headers, hidden-file/traversal boundaries, unsafe HTTP methods, JavaScript MIME type and SPA fallback. These are local developer penetration checks, not an independent penetration assessment or proof of Azure configuration.
+
+Paired throughput and travel-time charts share the same numeric scale for each metric; this is asserted in the browser workflow. Their observation horizons are identical.
+
+## Performance evidence
+
+- Headless engine benchmark: 544→599 moving agents, 900 packed steps, 5,451.8 ticks/s and p95 0.2224 ms, recorded in benchmarks/headless.json. This timing includes metrics and snapshot packing.
+- Real application browser benchmark: **544→552 moving agents**, **60 canvas FPS**, 60.10 measured animation callbacks/s, **30.18 simulation ticks/s**, p95 16.80 ms frame interval, at 1280×900 over 4.01 measured seconds. Full worker communication, live metrics and actual Canvas drawing are active. Raw data is in benchmarks/browser.json.
+- Browser thresholds: at least 500 moving agents, at least 50 measured rendering FPS to allow display scheduling jitter around the 60 FPS target, and at least 29.5 simulation ticks/s around the 30 Hz scheduler. The observed result reaches 60 FPS and exceeds 30 ticks/s. These are measurements on this host, not a universal device guarantee.
+- The screenshot in screenshots/flux-layered-city.png is a real built-app observation at 60 simulated seconds using seed 42, not the design proposal's example numbers.
 
 ## Failures found and resolved
 
-- The first free-flow fixture used a 5 veh/h Poisson arrival process and happened to generate no vehicles before observation; the assertion failed. The fixture now uses a sparse but populated 60 veh/h long road, while retaining seed determinism and a 35 s acceleration check.
-- The initial npm dependency graph reported ten moderate minimatch-related findings in development tooling. A pinned 11.0.1 minimatch override resolved them; type/lint/full tests and the real worker browser tests passed afterward.
-- The tsx command-line runner could not create its IPC pipe in the sandbox. The benchmark now uses `node --import tsx`, which runs successfully inside the sandbox.
-- Horizon accounting was tightened so arrivals up to the final tick are included, with an integration assertion that completed observations account for the full pre-generated schedule.
-- Terraform provider schema validation requires a local plugin IPC socket. A sandboxed repeat could not start that socket; validation is run outside the sandbox without resource authentication or modification.
+- A 5 veh/h free-flow fixture had no Poisson arrivals before observation; changed to a sparse but populated 60 veh/h long-road fixture with a 35 s acceleration check.
+- Initial dependency installation reported ten moderate minimatch-related development-tool findings. A pinned 11.0.1 override removed them; subsequent type/lint/headless/browser gates pass.
+- The tsx CLI could not create its sandbox IPC pipe; the benchmark uses node --import tsx successfully.
+- Final-tick arrival accounting was tightened and tested against the complete pre-generated schedule.
+- Terraform schema validation needs provider IPC. A sandboxed repeat could not start it; unsandboxed format/validate pass without Azure authentication or resource changes.
+- Canvas tests exposed a headless-shell GPU/ICU bundle crash. Application tests use the installed full Chromium new-headless channel, preserving the real renderer. No GPU disabling or relaxed performance assertion was used to obtain the result.
+- A keyboard test exposed ambiguous implicit dropdown-label matching; explicit inspector labels fixed it. All 12 app tests now pass.
+- Clearing corrupt local storage also clears the stale error; recovery is asserted in the security browser case.
 
 ## Reproduce
 
@@ -43,10 +58,12 @@ npm run benchmark
 npm run secrets:check
 PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright npx playwright install chromium
 npm run test:browser-worker
+npm run build
+npm run test:e2e
 ```
 
-The browser worker test starts and stops a loopback-only Python HTTP server. Raw Playwright reports are ignored under test-results/. Terraform can use the ignored local binary at `.tools/terraform` or an installed compatible version. It does not require Azure credentials for format/validate.
+Individual gates: test:unit, test:integration, test:performance, test:security, test:penetration. The local production server and isolated worker server are started/stopped by Playwright; raw reports and failure traces stay ignored in test-results/. Terraform's ignored local binary is .tools/terraform; format and validate need no Azure credentials.
 
-## Pending evidence
+## Remaining verification
 
-No full application build is claimed: there is intentionally no app entry/UI before owner design approval. Pending browser flows are preset loading, play/pause/step, node/road/ramp editing, import/export, localStorage handling, experiments, keyboard/tablet accessibility, stored/DOM XSS payloads, runtime header enforcement, 500-agent canvas FPS and responsiveness. Azure login, plan/apply, skeleton/final deployment and live security checks are deferred to the owner review on 6 November. A headless benchmark and blank-page worker integration do not establish rendered application FPS.
+Azure login/subscription, create-only plan/apply, public HTTPS deployment, actual live response headers and live preset/worker/experiment smoke tests await the owner review on 6 November. No local test result is presented as proof of public Azure deployment. Maximum allowed graph/population performance and other browser/device combinations remain unmeasured.

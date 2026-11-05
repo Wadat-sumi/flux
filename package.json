@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -15,13 +15,16 @@
     "build": "tsc --noEmit && vite build",
     "benchmark": "node --import tsx scripts/benchmark.ts",
     "check": "npm run typecheck && npm run lint && npm test",
-    "test:unit": "vitest run tests/engine.test.ts tests/boundaries.test.ts",
+    "test:unit": "vitest run tests/engine.test.ts tests/boundaries.test.ts tests/ui-model.test.ts",
     "test:integration": "vitest run tests/integration.test.ts tests/worker.test.ts",
     "test:performance": "vitest run tests/performance.test.ts",
     "test:security": "vitest run tests/security.test.ts",
     "secrets:check": "python3 scripts/check-secrets.py",
     "build:worker": "vite build --config vite.worker.config.ts",
-    "test:browser-worker": "npm run build:worker && PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --config playwright.worker.config.ts"
+    "test:browser-worker": "npm run build:worker && PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --config playwright.worker.config.ts",
+    "test:e2e": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test",
+    "test:penetration": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test tests/e2e/security.spec.ts",
+    "preview": "node scripts/serve-dist.mjs"
   },
   "dependencies": {
     "react": "19.3.1",

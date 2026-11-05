@@ -10,4 +10,4 @@ Accepted 5 November 2026. Use Terraform-pinned azurerm 4.6.0 and Azure Static We
 
 ## ADR 003: Owner-selected visual design
 
-Pending. Exactly three static proposals will be presented before application UI code. The selected direction, rationale, token set and later deviations will be recorded here and in design.md after the owner's response.
+Accepted 5 November 2026. The owner chose C — Layered City (“Lets go with C”) after reviewing exactly three proposals and before application UI code. Use muted isometric geometry and violet vehicles to make flyovers visible, with plan view for precise editing. Tokens, responsive behavior and deliberate dependency choices are recorded in design.md. Azure deployment remains deferred to the joint review on 6 November.
