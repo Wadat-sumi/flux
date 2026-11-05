@@ -1,0 +1,15 @@
+{
+  "recordedAt": "2026-11-05T17:13:57.624Z",
+  "runtime": "v24.12.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "seed": 42,
+  "dt": 0.03333333333333333,
+  "environment": "Node headless; includes metrics and snapshot packing; not a browser FPS measurement",
+  "agentsAtStart": 544,
+  "agentsAtEnd": 599,
+  "steps": 900,
+  "ticksPerSecond": 5451.824069176878,
+  "p95StepMs": 0.22241699999995035,
+  "targetMet": true
+}

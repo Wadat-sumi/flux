@@ -1,0 +1,6 @@
+# Example only. Authenticate through az login or ARM_* variables outside Git.
+subscription_id     = "00000000-0000-0000-0000-000000000000"
+location            = "westeurope"
+resource_group_name = "flux-quest-rg"
+app_name            = "flux-quest"
+sku_tier            = "Free"

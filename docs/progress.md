@@ -25,23 +25,38 @@
 
 - [x] Read and preserve exact master prompt.
 - [x] Record clock and inspect repository.
-- [ ] Initial commit and verified push.
-- [ ] Deterministic headless engine and scientific tests.
-- [ ] Transferable Web Worker protocol.
-- [ ] Validated Terraform and skeleton Azure deployment (by hour 24, blocked pending auth).
-- [ ] Three static design proposals, reference study and owner selection.
+- [x] Initial commit 441750a pushed to origin/main; actual remote write verified.
+- [x] Deterministic headless engine and ten named scientific tests, positive/negative/boundary, integration, security and performance checks.
+- [x] Transferable Web Worker protocol; compiled module worker verified in real Chromium.
+- [x] Terraform scaffold initialized, formatted and validated.
+- [ ] Skeleton Azure deployment: owner deferred joint Azure review to 6 November; hour-24 target is 6 November 22:22 IST.
+- [x] Three original static SVG proposals and reference study.
+- [ ] Owner design choice, required before application UI code.
 - [ ] UI, network editor, canvas, metrics and experiment comparison.
 - [ ] Full validation, E2E and performance evidence.
 - [ ] Final Azure deployment, docs, clean tree and remote SHA verification.
 
 ## Current work
 
-Initialize tooling, verify remote access, implement the headless engine, worker and Terraform before the UI design gate. No application UI code has been written.
+Finish the verified pre-UI milestone and present the three designs. No application UI component/layout/style code has been written. The review SVG drawings are explicit design-gate deliverables.
 
 ## Blockers
 
-Azure login/subscription is unavailable. The owner must authenticate locally or provide an authorized CI deployment path; secrets must never be pasted into source or chat. Literal initial-header compliance cannot be repaired in this session.
+The owner explicitly deferred Azure login/deployment to a joint review on 6 November. Do not request credentials or provision before that review. Design choice is the remaining required user decision before app UI. Literal initial-header compliance cannot be repaired in this session.
 
 ## Verification
 
-Preflight only. No application tests, build or deployment have run yet.
+80 headless/unit/integration/boundary/performance/adversarial tests passed. Type checking and lint passed. Production worker-only build passed; two Chromium worker integration/adversarial tests passed. Headless benchmark: 544–599 moving agents, 5,451.8 packed ticks/s, p95 0.2224 ms. Terraform fmt/validate passed. No full app build, rendered FPS or Azure deployment is claimed. See testing.md and security.md for exact limits.
+
+## Session events
+
+- 22:22 IST: began preflight; read exact attached prompt; no prior code/commits.
+- Initial commit and push verified using the owner's working GitHub keychain authentication outside sandbox; sandbox-only auth/DNS failures were not actual credential failures.
+- Verified 10 logical CPUs / 24 GiB memory outside the hardware-query sandbox.
+- Built original engine, strict schemas, presets, worker, scientific and adversarial checks. No external simulator code reused.
+- 22:34 IST: initial 21 tests passed; subsequent gridlock, boundary, integration and security work expanded coverage to 80 tests.
+- 22:43 IST: complete 80-test gate passed and benchmark JSON recorded.
+- 22:46 IST: repeated full gate passed; actual browser module-worker tests (2) passed.
+- Verified all three supplied design references visually; used only observed frames and owner-provided palette facts. Original static design mockups generated and visually reviewed.
+- User steering: defer Azure deployment to 6 November; require positive/negative/edge unit tests, integration, performance and penetration/security checks, OWASP consideration and AI guardrails; do not commit code without running those checks. These requirements are now documented in testing.md/security.md and govern all subsequent commits.
+- Latest clock update: 2026-11-05T22:51:17.894729+05:30. Elapsed 0.49 h; 71.51 h to hard deadline; 59.51 h to internal target.

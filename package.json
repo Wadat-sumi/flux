@@ -13,12 +13,36 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "build": "tsc --noEmit && vite build",
-    "benchmark": "tsx scripts/benchmark.ts",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "benchmark": "node --import tsx scripts/benchmark.ts",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "test:unit": "vitest run tests/engine.test.ts tests/boundaries.test.ts",
+    "test:integration": "vitest run tests/integration.test.ts tests/worker.test.ts",
+    "test:performance": "vitest run tests/performance.test.ts",
+    "test:security": "vitest run tests/security.test.ts",
+    "secrets:check": "python3 scripts/check-secrets.py",
+    "build:worker": "vite build --config vite.worker.config.ts",
+    "test:browser-worker": "npm run build:worker && PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --config playwright.worker.config.ts"
   },
   "dependencies": {
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
+    "eslint": "10.14.0",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
+  },
+  "overrides": {
+    "minimatch": "11.0.1"
   }
 }
