@@ -4,6 +4,21 @@ export interface Camera {
   y: number;
   zoom: number;
 }
+/** Preserve the anchored world point even when the fitted graph is off origin. */
+export function zoomAt(
+  camera: Camera,
+  requestedZoom: number,
+  center: [number, number],
+  anchor: [number, number] = center,
+): Camera {
+  const zoom = Math.max(0.3, Math.min(5, requestedZoom));
+  const ratio = zoom / camera.zoom;
+  return {
+    x: ratio * camera.x + (1 - ratio) * (anchor[0] - center[0]),
+    y: ratio * camera.y + (1 - ratio) * (anchor[1] - center[1]),
+    zoom,
+  };
+}
 export function project(
   x: number,
   y: number,

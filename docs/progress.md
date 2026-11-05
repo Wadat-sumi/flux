@@ -33,12 +33,12 @@
 - [x] Three original static SVG proposals and reference study.
 - [x] Owner chose C — Layered City before UI code; recorded in design.md and ADR 003.
 - [x] Layered City UI, network editor, ramps/signals/demand forms, live canvas/metrics, save/load, and paired experiments.
-- [x] Local validation: 106 headless tests + 12 built-app browser tests + 2 isolated worker browser tests. Rendered 500+ agent benchmark recorded.
+- [x] Local validation: 131 headless tests + 21 built-app browser tests + 2 isolated worker browser tests. Rendered 500+ agent benchmark recorded.
 - [ ] Final Azure deployment, docs, clean tree and remote SHA verification.
 
 ## Current work
 
-Local application implementation and verification are complete. Publish the tested UI milestone, preserve the local preview for review, and complete Azure authentication/provisioning/deployment jointly on 6 November.
+The UI milestone ef54ee1 is pushed. Complete and publish the expanded feature-audit fixes and evidence, preserve the local preview, then complete Azure authentication/provisioning/deployment jointly on 6 November.
 
 ## Blockers
 
@@ -46,7 +46,7 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 
 ## Verification
 
-106 headless/unit/integration/boundary/performance/adversarial tests, 12 built-app browser tests and 2 isolated worker browser tests pass. Type checking, lint, full build and credential-pattern scan pass. Real app: 544–552 moving agents, 60 canvas FPS, 30.18 simulation ticks/s, p95 frame 16.80 ms. Terraform fmt/validate pass; Azure plan/apply/deployment remain deferred. See testing.md and security.md for scope.
+131 headless/unit/integration/boundary/performance/adversarial tests, 21 built-app browser tests and 2 isolated worker browser tests pass. Type checking, lint, full build and credential-pattern scan pass. Real app: 544–552 moving agents, 60 canvas FPS, 30.18 simulation ticks/s, p95 frame 16.80 ms. Terraform fmt/validate pass; Azure plan/apply/deployment remain deferred. See testing.md and security.md for scope.
 
 ## Session events
 
@@ -67,3 +67,14 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Local browser performance: 60 FPS with 544–552 moving agents and 30.18 numerical ticks/s. Raw reproducible measurements in docs/benchmarks/browser.json.
 - Temporary QA servers stop automatically. The local Vite preview remains available for the owner's review; it is not a public deployment.
 - Updated clock: 2026-11-05T23:29:08.687530+05:30; elapsed 1.12 h, 70.88 h to hard deadline and 58.88 h to internal target.
+
+## Independent feature audit
+
+- Owner requested verification that all features are present and working. Re-ran the original 120-case gate, inspected the live UI and source against the master prompt, then added regressions before fixes.
+- Reproduced and fixed demand undo display, unavailable-average reporting and off-origin zoom drift; hardened saved-library IDs/UTF-8 limits and clarified queued vehicle glyphs. Exported missing experiment averages are null, not fabricated zero journeys.
+- Final gate: 131 headless + 21 built-app browser + 2 worker browser = 154 passing distinct cases, including empty-network construction, signal/road attributes, both infrastructure comparisons, cancellation/restart, and real pan/fit/drag.
+- Multi-road signal benchmark: 624–630 on-road agents, 60 FPS, 30.16 ticks/s, p95 16.70 ms. Pending arrivals excluded from the 500-agent assertion.
+- Full requirement matrix and exact limits: docs/feature-audit.md. Azure remains deferred; no plan/apply or provider substitution occurred.
+- Clock update: 2026-11-06T00:05:55.793240+05:30; elapsed 1.73 h, 70.27 h to hard deadline, 58.27 h to internal target.
+
+- Final audit confirmation 2026-11-06T00:10:36.666330+05:30: all 154 distinct tests pass after the final geometry scaling fix. Dependency audit reports zero advisories; Terraform fmt/validate and source/built-artifact credential scans pass. Raw session log remains untouched. Elapsed 1.81 h; 70.19 h remain before the hard deadline.

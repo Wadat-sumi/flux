@@ -45,7 +45,7 @@ npm run build
 npm run test:e2e
 ```
 
-The suite covers positive/negative/boundary unit cases, scientific invariants, integration, browser workflows, local penetration/security checks and real rendered performance. Individual commands include `test:unit`, `test:integration`, `test:performance`, `test:security`, and `test:penetration`. Exact results and environments are in [testing.md](docs/testing.md); raw timing data is in [docs/benchmarks](docs/benchmarks).
+The suite covers positive/negative/boundary unit cases, scientific invariants, integration, browser workflows, local penetration/security checks and real rendered performance. Individual commands include `test:unit`, `test:integration`, `test:performance`, `test:security`, and `test:penetration`. The [feature audit](docs/feature-audit.md) maps the requested features to concrete checks and records the fixes found. Exact results and environments are in [testing.md](docs/testing.md); raw timing data is in [docs/benchmarks](docs/benchmarks).
 
 ## Architecture and deployment
 

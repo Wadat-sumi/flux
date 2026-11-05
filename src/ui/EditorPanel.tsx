@@ -191,7 +191,7 @@ export function EditorPanel(p: Props) {
         </p>
         {s.demand.map((d, i) => (
           <form
-            key={`${d.origin}-${d.destination}-${i}`}
+            key={`${d.origin}-${d.destination}-${i}-${d.rate}`}
             onSubmit={(e) => {
               e.preventDefault();
               const data = new FormData(e.currentTarget);

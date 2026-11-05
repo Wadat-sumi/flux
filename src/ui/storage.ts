@@ -9,21 +9,27 @@ export interface SavedScenario {
 export function readSaved(storage: Pick<Storage, "getItem">): SavedScenario[] {
   const raw = storage.getItem(STORAGE_KEY);
   if (!raw) return [];
-  if (raw.length > 4_000_000)
+  if (
+    raw.length > 4_000_000 ||
+    new TextEncoder().encode(raw).byteLength > 4_000_000
+  )
     throw new Error(
       "Saved scenario library is too large. Clear local saves to recover.",
     );
   const input: unknown = JSON.parse(raw);
   if (!Array.isArray(input) || input.length > 12)
     throw new Error("Saved scenario library is invalid.");
+  const ids = new Set<string>();
   return input.map((item) => {
     if (
       !item ||
       typeof item !== "object" ||
       typeof item.id !== "string" ||
-      item.id.length > 80
+      !/^[A-Za-z0-9_-]{1,80}$/.test(item.id) ||
+      ids.has(item.id)
     )
       throw new Error("Invalid saved scenario.");
+    ids.add(item.id);
     return {
       id: item.id,
       scenario: importScenario(JSON.stringify(item.scenario)),

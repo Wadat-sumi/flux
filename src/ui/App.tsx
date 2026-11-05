@@ -27,6 +27,7 @@ import {
   type SavedScenario,
 } from "./storage";
 import type { View } from "./camera";
+import { completedAverage, experimentForExport } from "./observations";
 
 type Mode = "simulate" | "network" | "experiments";
 const presetOptions = [
@@ -949,7 +950,7 @@ export function App() {
                             reportVersion: 1,
                             baseline,
                             modified: pairedScenarios(baseline, scenario)[1],
-                            results,
+                            results: results.map(experimentForExport),
                           },
                           null,
                           2,
@@ -969,12 +970,26 @@ export function App() {
                       <span className="eyebrow">
                         {i === 0 ? "BASELINE" : "MODIFIED"}
                       </span>
-                      <Chart history={r.history} label="THROUGHPUT · TRIPS/H" scaleMax={Math.max(...results.flatMap(result=>result.history.map(sample=>sample.throughput)))}/>
+                      <Chart
+                        history={r.history}
+                        label="THROUGHPUT · TRIPS/H"
+                        scaleMax={Math.max(
+                          ...results.flatMap((result) =>
+                            result.history.map((sample) => sample.throughput),
+                          ),
+                        )}
+                      />
                       <Chart
                         history={r.history}
                         metric="meanTravelTime"
                         label="COMPLETED TRAVEL TIME · SECONDS"
-                        scaleMax={Math.max(...results.flatMap(result=>result.history.map(sample=>sample.meanTravelTime)))}
+                        scaleMax={Math.max(
+                          ...results.flatMap((result) =>
+                            result.history.map(
+                              (sample) => sample.meanTravelTime,
+                            ),
+                          ),
+                        )}
                       />
                     </div>
                   ))}
@@ -1024,17 +1039,17 @@ export function App() {
           <div className="detail-stats">
             <Metric
               label="MEAN SPEED"
-              value={fmt(metrics.meanSpeed * 3.6, 1)}
+              value={metrics.moving ? fmt(metrics.meanSpeed * 3.6, 1) : "—"}
               unit="km/h · includes stopped agents"
             />
             <Metric
               label="WAITING TIME"
-              value={fmt(metrics.meanWaitingTime, 1)}
+              value={metrics.completed ? fmt(metrics.meanWaitingTime, 1) : "—"}
               unit="s · completed trips"
             />
             <Metric
               label="MEAN DELAY"
-              value={fmt(metrics.meanDelay, 1)}
+              value={metrics.completed ? fmt(metrics.meanDelay, 1) : "—"}
               unit="s above free-flow · completed"
             />
             <Metric
@@ -1267,12 +1282,20 @@ function ComparisonTable({
 }: {
   results: [ExperimentResult, ExperimentResult];
 }) {
-  const rows: [string, (r: ExperimentResult) => number, string][] = [
+  const rows: [string, (r: ExperimentResult) => number | null, string][] = [
     ["Completed trips", (r) => r.metrics.completed, ""],
     ["Active / unfinished", (r) => r.metrics.active, ""],
     ["Rejected trips", (r) => r.metrics.rejected, ""],
-    ["Mean travel time", (r) => r.metrics.meanTravelTime, " s"],
-    ["Mean waiting time", (r) => r.metrics.meanWaitingTime, " s"],
+    [
+      "Mean travel time",
+      (r) => completedAverage(r.metrics, r.metrics.meanTravelTime),
+      " s",
+    ],
+    [
+      "Mean waiting time",
+      (r) => completedAverage(r.metrics, r.metrics.meanWaitingTime),
+      " s",
+    ],
     ["Throughput", (r) => r.metrics.throughput, " veh/h"],
     ["Queued vehicles", (r) => r.metrics.queue, ""],
     ["Gridlock warnings", (r) => r.warnings, ""],
@@ -1296,18 +1319,12 @@ function ComparisonTable({
             return (
               <tr key={label}>
                 <th>{label}</th>
+                <td>{a === null ? "—" : `${fmt(a, unit ? 1 : 0)}${unit}`}</td>
+                <td>{b === null ? "—" : `${fmt(b, unit ? 1 : 0)}${unit}`}</td>
                 <td>
-                  {fmt(a, unit ? 1 : 0)}
-                  {unit}
-                </td>
-                <td>
-                  {fmt(b, unit ? 1 : 0)}
-                  {unit}
-                </td>
-                <td>
-                  {b - a > 0 ? "+" : ""}
-                  {fmt(b - a, unit ? 1 : 0)}
-                  {unit}
+                  {a === null || b === null
+                    ? "—"
+                    : `${b - a > 0 ? "+" : ""}${fmt(b - a, unit ? 1 : 0)}${unit}`}
                 </td>
               </tr>
             );

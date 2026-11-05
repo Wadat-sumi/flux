@@ -7,6 +7,7 @@ import {
   project,
   unproject,
   segmentDistance,
+  zoomAt,
   type Camera,
   type View,
 } from "./camera";
@@ -48,7 +49,7 @@ export function NetworkCanvas(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null),
     propsRef = useRef(props);
   const camera = useRef<Camera>({ x: 0, y: 0, zoom: 1 });
-  const geometry = useRef({ scale: 1, cx: 0, cy: 0 });
+  const geometry = useRef({ scale: 1, cx: 0, cy: 0, centerX: 0, centerY: 0 });
   const drag = useRef<{
     x: number;
     y: number;
@@ -69,14 +70,13 @@ export function NetworkCanvas(props: Props) {
     camera.current = { x: 0, y: 0, zoom: 1 };
   }, [props.fitVersion, props.view]);
   useEffect(() => {
-    if (props.zoomAction)
-      camera.current.zoom = Math.max(
-        0.3,
-        Math.min(
-          5,
-          camera.current.zoom * (props.zoomAction > 0 ? 1.2 : 1 / 1.2),
-        ),
+    if (props.zoomAction) {
+      camera.current = zoomAt(
+        camera.current,
+        camera.current.zoom * (props.zoomAction > 0 ? 1.2 : 1 / 1.2),
+        [geometry.current.centerX, geometry.current.centerY],
       );
+    }
   }, [props.zoomAction]);
 
   useEffect(() => {
@@ -140,7 +140,13 @@ export function NetworkCanvas(props: Props) {
         left + availableW / 2 - ((minX + maxX) / 2) * scale + camera.current.x;
       const cy =
         95 + availableH / 2 - ((minY + maxY) / 2) * scale + camera.current.y;
-      geometry.current = { scale, cx, cy };
+      geometry.current = {
+        scale,
+        cx,
+        cy,
+        centerX: left + availableW / 2,
+        centerY: 95 + availableH / 2,
+      };
       const point = (x: number, y: number, layer = 0): [number, number] => {
         const [a, b] = project(x, y, layer, view);
         return [cx + a * scale, cy + b * scale];
@@ -371,8 +377,10 @@ export function NetworkCanvas(props: Props) {
             l = a.layer + (b.layer - a.layer) * t;
           const ux = dx / len,
             uy = dy / len,
-            carLength = 10,
-            carWidth = 5;
+            // Scale the glyph with the operational-to-drawn length ratio so
+            // editing a road length does not make queue glyphs overlap.
+            carLength = Math.min(6, (len / e.length) * 6),
+            carWidth = 3.5;
           const corners = [
             [-carLength / 2, -carWidth / 2],
             [carLength / 2, -carWidth / 2],
@@ -380,7 +388,7 @@ export function NetworkCanvas(props: Props) {
             [-carLength / 2, carWidth / 2],
           ].map(([u, v]) => point(x + ux * u + nx * v, y + uy * u + ny * v, l));
           poly(corners, palette.car);
-          if (scale > 0.7 && states.length < 9000) {
+          if (carLength * scale >= 5 && states.length < 9000) {
             const [px, py] = point(x, y, l);
             ctx.fillStyle = "#C1B7D1";
             ctx.fillRect(
@@ -402,7 +410,9 @@ export function NetworkCanvas(props: Props) {
           ctx.fill();
           ctx.fillStyle = "#5F546D";
           ctx.fillText(
-            e.ramp ? `Ramp L${a.layer} → L${b.layer}` : `L${a.layer} · ${elevated ? 'Flyover' : 'Ground'}`,
+            e.ramp
+              ? `Ramp L${a.layer} → L${b.layer}`
+              : `L${a.layer} · ${elevated ? "Flyover" : "Ground"}`,
             px,
             py + 1,
           );
@@ -488,16 +498,12 @@ export function NetworkCanvas(props: Props) {
       const r = canvas.getBoundingClientRect(),
         px = event.clientX - r.left,
         py = event.clientY - r.top;
-      const old = camera.current.zoom,
-        next = Math.max(
-          0.3,
-          Math.min(5, old * Math.exp(-event.deltaY * 0.0015)),
-        ),
-        ratio = next / old;
-      const { cx, cy } = geometry.current;
-      camera.current.x += (px - cx) * (1 - ratio);
-      camera.current.y += (py - cy) * (1 - ratio);
-      camera.current.zoom = next;
+      camera.current = zoomAt(
+        camera.current,
+        camera.current.zoom * Math.exp(-event.deltaY * 0.0015),
+        [geometry.current.centerX, geometry.current.centerY],
+        [px, py],
+      );
     };
     canvas.addEventListener("wheel", wheel, { passive: false });
     return () => {
