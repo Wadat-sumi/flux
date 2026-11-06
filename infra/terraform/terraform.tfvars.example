@@ -1,6 +1,16 @@
-# Example only. Authenticate through az login or ARM_* variables outside Git.
+# Non-secret examples only. Use authorized Azure identity. Real credentials belong in Key Vault.
 subscription_id     = "00000000-0000-0000-0000-000000000000"
 location            = "westeurope"
 resource_group_name = "flux-quest-rg"
 app_name            = "flux-quest"
-sku_tier            = "Free"
+
+# Billable stages remain off until joint Azure review.
+enable_backend             = false
+provision_backend_database = false
+deploy_backend_app         = false
+enable_tomtom              = false
+backend_image              = null
+backend_registry_name      = "fluxquestregistry"
+backend_key_vault_name     = "flux-quest-vault"
+key_vault_admin_ip_rules   = []
+tomtom_secret_name         = "tomtom-api-key"

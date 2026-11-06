@@ -2,6 +2,8 @@ QUEST Lab Full Stack AI Pre-doctoral application, Shivarshi Shivansh, 5 Nov 9:30
 
 # MASTER EXECUTION PROMPT — QUEST Lab Traffic Simulation
 
+Revision: 6 November 2026. The owner explicitly expanded Flux to a full-stack application with real-data ingestion and server-side simulation, and required performance testing with more than 100 concurrent users. This revision supersedes the original zero-server restriction. The exact original is preserved in `docs/master-prompt-original.md`; the raw session transcript remains untouched.
+
 ## 0. Mission, Operating Mode, and Constraints
 
 You are an autonomous senior interdisciplinary engineering and scientific research team comprising:
@@ -12,7 +14,7 @@ You are an autonomous senior interdisciplinary engineering and scientific resear
 - Applied mathematician and algorithm engineer
 - Full-stack software engineer
 - Interactive visualization and UI/UX designer
-- Data engineer (GIS/OSM work is optional and only if time permits)
+- Data engineer (real-road and observed-demand ingestion is required; full-city GIS expansion is optional)
 - QA, performance, security, and DevOps engineer
 - Scientific technical writer
 
@@ -173,38 +175,13 @@ Track:
 - Deployment status.
 - Remaining time relative to the 72-hour deadline.
 
-### 1.5 Deployment strategy (Azure + Terraform)
+### 1.5 Deployment strategy (full-stack Azure + Terraform)
 
-Deploy Flux as a client-side Vite + React SPA with zero server-side components, hosted on **Azure** and provisioned with **Terraform**. All infrastructure must be defined as code in the repository and created within this session.
+Deploy Flux as a React/Vite frontend with a Node.js/TypeScript API, PostgreSQL persistence, authenticated per-user records and isolated server-side simulation workers. Keep browser simulation available for interactive visualization. A same-origin Azure Container App serves frontend and API; Azure Database for PostgreSQL Flexible Server persists users, sessions, scenarios, data provenance, jobs and results. Define infrastructure in `infra/terraform/`. This supersedes the earlier unprovisioned Static Web Apps scaffold; remove its unused resource/deployment-token output so the full-stack plan creates no unused deployment key.
 
-**Hosting target: Azure Static Web Apps** (Free tier by default). It suits a static SPA, gives a public HTTPS URL, and needs no servers. Set the Vite `base` option to `'/'`.
+Backend resources incur costs. Keep backend provisioning disabled by default and require explicit joint review of subscription, image, pricing and the create-only Terraform plan. The owner deferred Azure login/provisioning/deployment to a joint review on 6 November; do not deploy before that review. Validate all scripts locally, never substitute another provider, never modify pre-existing resources, and never commit credentials, state, variable files, plans or tokens. Use private database networking, TLS, least privilege and backups. All real application/deployment secrets must live in Azure Key Vault, accessed through managed identities and secret references. Enter values through the Portal, never chat, Git, committed configuration or shell arguments. Local optional integrations retrieve secrets through authorized developer identity; database provisioning state stays protected and uncommitted.
 
-**Terraform scripts** live in `infra/terraform/` and must include:
-
-- `versions.tf`: required Terraform version and a pinned `azurerm` provider version (note that azurerm v4 requires `subscription_id`, supplied through a variable or `ARM_SUBSCRIPTION_ID`).
-- `main.tf`: an `azurerm_resource_group` and an `azurerm_static_web_app` (Free SKU by default, tags including `project = "flux"`).
-- `variables.tf`: `subscription_id`, `location` (default to a region supported by Static Web Apps, verified against current Azure documentation), `resource_group_name`, `app_name`, `sku_tier`.
-- `outputs.tf`: the default hostname/URL, and the deployment token as a **sensitive** output.
-- `terraform.tfvars.example`: example values with no real secrets.
-- `README` notes in `docs/deployment.md` explaining `terraform init`, `fmt`, `validate`, `plan`, `apply`, and `destroy`.
-
-**Application deployment config:**
-
-- Add `staticwebapp.config.json` to the build output (SPA navigation fallback to `index.html`, correct MIME types for worker and asset files, and basic security headers).
-- Deploy the built `dist/` with the Static Web Apps CLI (`swa deploy`) using the deployment token, or through a GitHub Actions workflow that reads the token from a repository secret. Never commit the token.
-
-**Terraform safety rules:**
-
-- Add `.terraform/`, `*.tfstate`, `*.tfstate.*`, `*.tfvars` (except the `.example` file), and crash logs to `.gitignore`. Never commit state files, tfvars with real values, or tokens.
-- Run `terraform fmt -check` and `terraform validate` before every commit that touches `infra/`. These work without Azure credentials.
-- Run `terraform plan` and `terraform apply` **only if** Azure authentication was verified in the preflight. Use local state, and document that remote state (Azure Storage backend) is recommended for real use.
-- Never use `-auto-approve` against anything other than the Flux resource group created by these scripts. Do not modify or destroy any pre-existing Azure resources.
-- If Azure credentials are not available, do not stall: finish and validate the Terraform code, record the blocker in `docs/progress.md`, ask for credentials in the single batched request (§1.3), and keep the app deployable by `swa deploy` or CI once credentials exist. Do not silently substitute another hosting provider.
-
-**Other constraints and timing:**
-
-- Do not use SharedArrayBuffer. Communicate with the Web Worker through `postMessage` using transferable typed arrays; this also keeps the app portable.
-- **Do a skeleton deployment (hello-world SPA with a worker round trip) to Azure within the first ~24 hours**, so that Terraform and credential issues surface early. Finalize the deployment at the end, and keep Terraform work time-boxed so it does not displace core simulation work.
+Run `terraform fmt -check` and `terraform validate` before commits touching infrastructure. Run plan/apply only after authentication and the joint review. Build a reproducible container and document image build/push, provisioning, migrations, health checks, rollback and full-stack live smoke tests. Keep `postMessage` transferable buffers for browser workers and do not use SharedArrayBuffer.
 
 ---
 
@@ -283,6 +260,15 @@ Select the stack after inspecting the environment, using these guidelines.
 - Tailwind CSS
 - Canvas / WebGL rendering layer (e.g., PixiJS, Konva, or HTML5 2D Canvas) for high-performance agent rendering
 - Lightweight charting library
+
+**Backend (mandatory revised scope)**
+
+- Node.js/TypeScript HTTP API with strict schemas, secure password hashing, revocable HttpOnly sessions, CSRF/origin controls, rate limits and per-user authorization.
+- Durable PostgreSQL storage with versioned migrations, parameterized queries and bounded histories. Embedded PostgreSQL is acceptable for local development and tests; Azure uses managed PostgreSQL.
+- Isolated, bounded server simulation and paired-experiment jobs with status/progress, cancellation, timeouts, deterministic results and restart recovery.
+- Support Bengaluru, Mumbai, Chennai, Pune, Hyderabad and Delhi in the data-source catalogue. Include optional server-only TomTom traffic observations; do not expose provider credentials or invent licensing/coverage. Research public Kaggle and Snowflake Marketplace candidates, verify provenance and do not treat a listing as empirical ground truth.
+- Real OpenStreetMap JSON road imports plus observed origin-destination count CSV imports. Preserve source, license, capture time, SHA-256 and normalization warnings. Never invent observed demand or claim calibration from geometry alone.
+- Frontend workflows for accounts, server saves, real-data import, job history and downloadable results. Synthetic presets stay explicitly labeled.
 
 **Simulation core**
 
@@ -512,7 +498,7 @@ Implement automated checks, and document them in `docs/validation.md`, for:
 - **Static checks:** TypeScript type checking, linting, build verification.
 - **Unit and integration tests:** Graph connectivity, routing, agent movement, signal transitions, metric collection, JSON schema validation, deadlock handling.
 - **End-to-end tests:** Automated browser tests (Playwright or similar) verifying preset loading, simulation playback, network editing, scenario saving, and experiment execution.
-- **Performance benchmarks:** Target stable execution with 500+ active agents at 30+ simulation ticks per second.
+- **Performance benchmarks:** Target stable execution with 500+ active agents at 30+ simulation ticks per second. Additionally test more than 100 concurrent authenticated users (120 minimum target), including reads, persistence, job admission and overload behavior. Record workload, duration, latency percentiles, throughput, errors, environment and limits; do not claim 120 simultaneous simulation workers.
 
 Record verification results in `docs/testing.md`.
 
@@ -536,9 +522,9 @@ Maintain the following structured files in the repository:
 - `docs/model-selection.md`: Engine and movement-model choice, alternatives, and tradeoffs.
 - `docs/methodology.md`: Mathematical formulation (car-following model, lane rules, routing, signal logic, capacity semantics, deadlock handling).
 - `docs/validation.md`: Scientific validation tests and theoretical behavior comparison.
-- `docs/data-sources.md`: Data provenance, synthetic demand policies, optional OSM import notes.
+- `docs/data-sources.md`: Data provenance, synthetic demand policies, real-data formats, OSM attribution and observed-count provenance.
 - `docs/testing.md`: Test execution results, E2E checks, performance benchmarks.
-- `docs/deployment.md`: Build steps, Azure Static Web Apps hosting configuration, Terraform usage (`init`, `fmt`, `validate`, `plan`, `apply`, `destroy`), required Azure authentication, deployment token handling, and the deployment URL.
+- `docs/deployment.md`: Build steps, full-stack Azure Container Apps/PostgreSQL hosting and legacy static preview configuration, Terraform usage (`init`, `fmt`, `validate`, `plan`, `apply`, `destroy`), required Azure authentication, deployment token handling, and the deployment URL.
 - `docs/design-proposals.md` and `docs/design/`: The study of the references, the three design proposals, and their mockups.
 - `docs/design.md`: The selected design, tokens, layout, and any later deviations.
 - `docs/decisions.md`: Architecture decision records (ADRs), including the design choice.
@@ -553,7 +539,7 @@ Maintain the following structured files in the repository:
 - Total duration: maximum 72 hours; internal target for the final commit is hour 60.
 - Maintain incremental progress in `docs/progress.md`.
 - Order of work: core simulation logic → Web Worker integration → **Terraform scaffold and skeleton Azure deployment (by ~hour 24)** → **UI design gate (§7.0: three proposals, owner chooses)** → network UI and canvas → metrics and presets → experiments → validation tests → documentation → final Azure deployment and verification.
-- If time runs short, cut optional features (OSM import, advanced signal control, extra presets, custom domains or CDN in Terraform) before cutting validation tests or documentation.
+- If time runs short, cut optional features (full-city GIS expansion, advanced signal control, extra presets, custom domains or CDN in Terraform) before cutting validation tests or documentation.
 
 ---
 
@@ -569,8 +555,12 @@ Maintain the following structured files in the repository:
 
 ## 15. Definition of Done
 
+- [ ] Mandatory full-stack API, authenticated per-user persistence and isolated server jobs implemented and tested.
+- [ ] Real-road and observed-demand ingestion verified, with provenance and honest calibration limits.
+- [ ] More than 100 concurrent authenticated users performance-tested with published measured results.
+- [ ] Full-stack Azure infrastructure validated and live checks recorded after joint review.
 - [ ] Repository: https://github.com/Wadat-sumi/flux
-- [ ] Working application deployed to a public Azure Static Web Apps URL, branded as Flux (UI wordmark, page title, favicon, README, docs, exported JSON).
+- [ ] Working full-stack application deployed to a public Azure HTTPS URL, branded as Flux (UI wordmark, page title, favicon, README, docs, exported JSON).
 - [ ] Terraform scripts for Azure in `infra/terraform/` pass `terraform fmt -check` and `terraform validate`, with plan/apply results recorded in `docs/deployment.md` and `docs/progress.md`. No state files, tfvars secrets, or tokens committed.
 - [ ] Grade-separated flyover logic (including ramp rule) fully implemented and validated.
 - [ ] Web Worker architecture keeping rendering at 60 FPS and simulation at 30+ ticks/sec for 500+ agents.

@@ -1,15 +1,16 @@
-output "default_hostname" {
-  description = "Hostname of Flux on Azure Static Web Apps."
-  value       = azurerm_static_web_app.flux.default_host_name
-}
-
 output "url" {
-  description = "Public HTTPS Flux deployment URL."
-  value       = "https://${azurerm_static_web_app.flux.default_host_name}"
+  description = "Full-stack public HTTPS origin after reviewed deployment."
+  value       = local.database_enabled && var.deploy_backend_app ? "https://${azurerm_container_app.backend[0].ingress[0].fqdn}" : null
 }
-
-output "deployment_token" {
-  description = "Secret deployment token; never print, commit or paste into chat."
-  value       = azurerm_static_web_app.flux.api_key
-  sensitive   = true
+output "backend_registry" {
+  value       = var.enable_backend ? azurerm_container_registry.backend[0].login_server : null
+  description = "Build/push the tested Flux image here after joint review."
+}
+output "backend_url" {
+  value       = local.database_enabled && var.deploy_backend_app ? "https://${azurerm_container_app.backend[0].ingress[0].fqdn}" : null
+  description = "Full-stack HTTPS origin, available after migrations and service deployment."
+}
+output "tomtom_secret_reference" {
+  value       = var.enable_backend ? "${azurerm_key_vault.backend[0].vault_uri}secrets/${var.tomtom_secret_name}" : null
+  description = "Non-secret URI only; enter the actual value through the Azure Portal, never Terraform."
 }

@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-server/
+.flux-data/
 coverage/
 playwright-report/
 test-results/

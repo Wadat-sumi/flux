@@ -11,3 +11,25 @@ Accepted 5 November 2026. Use Terraform-pinned azurerm 4.6.0 and Azure Static We
 ## ADR 003: Owner-selected visual design
 
 Accepted 5 November 2026. The owner chose C — Layered City (“Lets go with C”) after reviewing exactly three proposals and before application UI code. Use muted isometric geometry and violet vehicles to make flyovers visible, with plan view for precise editing. Tokens, responsive behavior and deliberate dependency choices are recorded in design.md. Azure deployment remains deferred to the joint review on 6 November.
+
+## ADR 004: Owner-authorized full-stack revision
+
+Accepted 6 November 2026. The owner explicitly superseded the original zero-server restriction. Keep the original prompt in master-prompt-original.md and revise the active master prompt. Add a same-origin Node 24/TypeScript HTTP service, PostgreSQL persistence, scrypt passwords, revocable HttpOnly sessions, owner-scoped records and isolated worker-thread jobs. Use PGlite for convenient filesystem-persistent local development and pg over PostgreSQL for Azure. The engine stays shared with the browser worker so deterministic results remain comparable. Never put an administrator database credential in the runtime service; a separate manual migration job grants the restricted flux_app role.
+
+Azure Container Apps serves API and built frontend together to preserve same-origin cookies/CSP. Private-network PostgreSQL, ACR image pull with managed identity, backups and a separate migration job are defined in Terraform. Backend resources are disabled by default because they are billable and Azure review is deferred. One API replica/CPU worker is supported; this is not a horizontally distributed queue. Interrupted runs are marked failed and queued jobs resume.
+
+## ADR 005: Real observations, provider estimates and calibration
+
+Accepted 6 November 2026. Import uploaded OSM JSON without server-side arbitrary URL fetching and retain the exact file and normalized scenario with SHA-256/provenance. Preserve explicit layers and warn about inferred controls/lanes and unsupported turn restrictions. Counts must be documented OD vehicle observations; overlapping intervals and unsupported units/identifiers are rejected. Constant mean rates are an explicit current limitation. Synthetic presets and test counts stay labeled. A public, attributed small Bengaluru road sample contains no assumed traffic.
+
+TomTom is an optional authenticated backend adapter to the documented v4 JSON flow-segment endpoint, whose response supplies speed/travel-time estimates. A matching Orbis v2 JSON segment endpoint was not verified, so no guessed endpoint is used. Restrict geography to the six requested city regions, prohibit arbitrary hosts/redirects, cap time/response size/concurrency/quotas, and never echo upstream errors or credentials. Provider traffic is transient, with attribution and confidence; retention/export needs the appropriate commercial agreement. Current congestion speed is never silently substituted for a legal speed limit or converted into OD demand.
+
+Owner requires a repeated >100-user test after full integration. Use 120 actual password-authenticated HTTP clients, distinct owner records and real loopback persistence, with a stated workload, duration, latency/throughput/error gates and queue saturation. Separately retain rendered 500+ vehicle/30 Hz tests. Neither local performance nor map/provider access proves calibrated real-city accuracy.
+
+## ADR 006: All application secrets in Azure Key Vault
+
+Accepted 6 November 2026 at the owner's explicit direction. This supersedes the earlier shell/environment-value suggestion for local keys. All real provider, database and future application/deployment secrets belong in Azure Key Vault. Azure injects references using managed identities; local optional integrations use authorized Azure CLI identity and the official Key Vault SDK with non-secret vault references. Static plaintext credentials in local environment/configuration are rejected by the server boundary. Authentication password/session hashes remain database records.
+
+Provision Azure in stages: create the project vault first, enter database passwords/TomTom directly through the Portal, then provision the database and derived connection-string secrets. The runtime/migration identities receive separate secret-scoped grants. No TomTom value is a Terraform input or lookup. Database provisioning still puts sensitive database values into protected state, which is never committed. AGENTS.md makes this policy persistent for future work. Live identity/network/rotation checks remain deferred; local contract tests do not certify Azure enforcement.
+
+The final full-stack/vault review removed the unprovisioned legacy SWA resource and deployment-token output; no existing Azure resource was changed. Container Apps now owns the sole planned public origin, avoiding an unused static deployment credential.

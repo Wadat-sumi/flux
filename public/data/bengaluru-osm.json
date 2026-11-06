@@ -1,0 +1,197 @@
+{
+  "version": "0.6",
+  "generator": "openstreetmap-cgimap 2.1.1 (1082372 spike-06.openstreetmap.org)",
+  "copyright": "OpenStreetMap and contributors",
+  "attribution": "http://www.openstreetmap.org/copyright",
+  "license": "http://opendatacommons.org/licenses/odbl/1-0/",
+  "bounds": {
+    "minlat": 12.9756,
+    "minlon": 77.5936,
+    "maxlat": 12.977,
+    "maxlon": 77.5952
+  },
+  "elements": [
+    {
+      "type": "node",
+      "id": 249088242,
+      "lat": 12.9768882,
+      "lon": 77.5983075,
+      "timestamp": "2010-03-09T16:39:49Z",
+      "version": 4,
+      "changeset": 4082292,
+      "user": "PlaneMad",
+      "uid": 1306,
+      "tags": {
+        "barrier": "gate"
+      }
+    },
+    {
+      "type": "node",
+      "id": 663310002,
+      "lat": 12.9769506,
+      "lon": 77.5980681,
+      "timestamp": "2010-03-09T16:39:45Z",
+      "version": 1,
+      "changeset": 4082292,
+      "user": "PlaneMad",
+      "uid": 1306
+    },
+    {
+      "type": "node",
+      "id": 249088241,
+      "lat": 12.9769476,
+      "lon": 77.5972669,
+      "timestamp": "2010-03-09T16:39:49Z",
+      "version": 4,
+      "changeset": 4082292,
+      "user": "PlaneMad",
+      "uid": 1306
+    },
+    {
+      "type": "node",
+      "id": 249088240,
+      "lat": 12.9768334,
+      "lon": 77.5966933,
+      "timestamp": "2010-03-07T06:47:33Z",
+      "version": 3,
+      "changeset": 4057638,
+      "user": "Byung Kyu Park",
+      "uid": 77582
+    },
+    {
+      "type": "node",
+      "id": 663558098,
+      "lat": 12.976834,
+      "lon": 77.5964815,
+      "timestamp": "2010-03-10T08:52:25Z",
+      "version": 1,
+      "changeset": 4087197,
+      "user": "PlaneMad",
+      "uid": 1306
+    },
+    {
+      "type": "node",
+      "id": 249088239,
+      "lat": 12.9768514,
+      "lon": 77.5963422,
+      "timestamp": "2024-09-21T17:11:31Z",
+      "version": 5,
+      "changeset": 156921633,
+      "user": "uknown-gryphus",
+      "uid": 2425805
+    },
+    {
+      "type": "node",
+      "id": 249088238,
+      "lat": 12.9769009,
+      "lon": 77.5959584,
+      "timestamp": "2024-09-21T17:11:31Z",
+      "version": 4,
+      "changeset": 156921633,
+      "user": "uknown-gryphus",
+      "uid": 2425805
+    },
+    {
+      "type": "node",
+      "id": 12190248456,
+      "lat": 12.9769049,
+      "lon": 77.5957497,
+      "timestamp": "2024-09-21T17:11:31Z",
+      "version": 1,
+      "changeset": 156921633,
+      "user": "uknown-gryphus",
+      "uid": 2425805
+    },
+    {
+      "type": "node",
+      "id": 249088237,
+      "lat": 12.9768799,
+      "lon": 77.5955512,
+      "timestamp": "2024-09-21T17:11:31Z",
+      "version": 4,
+      "changeset": 156921633,
+      "user": "uknown-gryphus",
+      "uid": 2425805
+    },
+    {
+      "type": "node",
+      "id": 2190797657,
+      "lat": 12.9767325,
+      "lon": 77.5951999,
+      "timestamp": "2013-03-08T06:14:25Z",
+      "version": 1,
+      "changeset": 15289806,
+      "user": "PlaneMad",
+      "uid": 1306
+    },
+    {
+      "type": "node",
+      "id": 249088235,
+      "lat": 12.9762574,
+      "lon": 77.5947156,
+      "timestamp": "2024-09-26T13:48:28Z",
+      "version": 7,
+      "changeset": 157129982,
+      "user": "uknown-gryphus",
+      "uid": 2425805,
+      "tags": {
+        "crossing": "uncontrolled",
+        "crossing:markings": "zebra",
+        "highway": "crossing",
+        "traffic_calming": "table"
+      }
+    },
+    {
+      "type": "node",
+      "id": 663941113,
+      "lat": 12.9761756,
+      "lon": 77.5946381,
+      "timestamp": "2024-08-14T04:49:03Z",
+      "version": 3,
+      "changeset": 155221720,
+      "user": "uknown-gryphus",
+      "uid": 2425805
+    },
+    {
+      "type": "way",
+      "id": 46728546,
+      "timestamp": "2024-09-26T13:48:28Z",
+      "version": 27,
+      "changeset": 157129982,
+      "user": "uknown-gryphus",
+      "uid": 2425805,
+      "nodes": [
+        249088242,
+        663310002,
+        249088241,
+        249088240,
+        663558098,
+        249088239,
+        249088238,
+        12190248456,
+        249088237,
+        2190797657,
+        249088235,
+        663941113
+      ],
+      "tags": {
+        "access": "permissive",
+        "bicycle": "yes",
+        "cycleway": "no",
+        "foot": "yes",
+        "highway": "unclassified",
+        "lanes": "2",
+        "maxspeed": "25",
+        "motor_vehicle:conditional": "yes @ (Mo-Sa 08:00-21:00)",
+        "note": "Vehicular Traffic Allowed only between - 8AM to 9PM from Monday to Saturday. Sunday Vehicles not permitted.",
+        "oneway": "yes",
+        "sidewalk": "both",
+        "sidewalk:both:kerb": "raised",
+        "surface": "asphalt"
+      }
+    }
+  ],
+  "flux_source": "https://api.openstreetmap.org/api/0.6/map.json?bbox=77.5936,12.9756,77.5952,12.9770",
+  "flux_note": "Small subset of a real Bengaluru OSM extract; no traffic counts included. \u00a9 OpenStreetMap contributors, ODbL.",
+  "flux_captured_at": "2026-11-06T14:54:36.522880Z"
+}

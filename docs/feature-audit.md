@@ -1,12 +1,12 @@
 # Flux feature verification
 
-Result: the mandatory **local application workflows are present and pass verification**, after correcting the edge cases below. Public Azure deployment is not verified; the owner deferred it to a joint review on 6 November 2026. Optional GIS/OSM import is not implemented. The simulator remains a simplified, uncalibrated research demonstration.
+Result: the original local workflows and the owner-authorized **full-stack backend/UI workflows are present and pass verification**, after correcting the edge cases below. Public Azure deployment is not verified; the owner deferred it to a joint review on 6 November 2026. OSM JSON and observed OD CSV ingestion are now implemented; full-city GIS expansion and empirical calibration remain outside the verified corridor scope. The simulator remains a simplified, uncalibrated research demonstration.
 
 ## Evidence and scope
 
 Audited the original master-prompt requirements against source, the actual running in-app browser, production-build browser workflows, isolated worker transport, scientific invariants and malformed inputs. The original 120-test gate passed again before extending it. Newly written browser regressions first failed on the old build, then passed with the fixes.
 
-Final gate: **131 headless tests + 21 built-app browser tests + 2 isolated worker browser tests = 154 distinct passing cases**. Type checking, lint and the full production build pass. Test sources: tests/engine.test.ts, tests/boundaries.test.ts, tests/integration.test.ts, tests/worker.test.ts, tests/ui-model.test.ts, tests/feature-audit.test.ts, tests/security.test.ts, tests/performance.test.ts, tests/e2e/ and tests/e2e-worker/.
+Final full-stack gate: **219 headless tests + 26 built-app browser tests + 2 isolated worker browser tests = 247 distinct passing cases**, plus the repeated 120-user API workload. The earlier frontend audit comprised 154 cases. Type checking, lint and the full production build pass. Test sources: tests/engine.test.ts, tests/boundaries.test.ts, tests/integration.test.ts, tests/worker.test.ts, tests/ui-model.test.ts, tests/feature-audit.test.ts, tests/security.test.ts, tests/performance.test.ts, tests/e2e/ and tests/e2e-worker/.
 
 ## Requirement-to-evidence matrix
 
@@ -32,7 +32,7 @@ Final gate: **131 headless tests + 21 built-app browser tests + 2 isolated worke
 | Responsive/accessibility | Laptop, tablet and phone widths, no horizontal overflow, native labeled forms, keyboard navigation and dialog Escape | Production browser tests; actual accessibility-tree inspection |
 | Security/AI guardrails | Hostile imports/labels/storage rejected or inert; no outbound attacker requests, script execution or AI/tool bridge | Core adversarial tests, five production security cases and security.md |
 | Performance | Real rendering plus worker and live metrics with 500+ on-road agents in two topologies | Measured browser JSON reports, summarized below |
-| Terraform | Resource group + Free SWA, pinned provider, sensitive token output, ignored state/tokens | fmt/validate, lockfile and source/secret review |
+| Terraform | Container Apps + private PostgreSQL + Key Vault/managed identities/ACR/migration job, staged off by default; no unused SWA token | fmt/validate, lockfile, source/secret review; Azure plan/apply deferred |
 | Azure plan/apply/public URL | **Deferred, not verified** | Owner's instruction; deployment.md joint-review checklist |
 
 ## Issues found and corrected
@@ -58,6 +58,14 @@ In the synthetic seed-42, 180 s bottleneck pair, widening the downstream segment
 
 This verification establishes the checked local workflows and invariants, not correctness for every possible input/device. Lane changes and junction reservations are deliberately simplified; vehicle-safety checks are longitudinal within each edge/lane, not full swept-body turning geometry. Road coordinates are illustrative and operational lengths are independently editable. See methodology.md and limitations.md.
 
-Azure authentication, create-only plan/apply, HTTPS deployment, actual live-host headers and public smoke tests remain unperformed by agreement. Optional GIS import, adaptive routing/signals, empirical calibration and an independent professional penetration assessment are outside the implemented scope. Session-eligibility limitations are recorded candidly in progress.md; this report does not certify them away.
+Azure authentication, create-only plan/apply, HTTPS deployment, actual live-host headers and public smoke tests remain unperformed by agreement. Full-city GIS expansion, adaptive routing/signals, empirical calibration and an independent professional penetration assessment remain outside the implemented scope. Bounded OSM/observed-demand ingestion is implemented. Session-eligibility limitations are recorded candidly in progress.md; this report does not certify them away.
 
 The live editor screenshot in screenshots/audit-editor.png records the restored demand inspector. The original static design proposals remain unchanged.
+
+## Full-stack expansion verification
+
+Accounts/session restore/revocation, owner-scoped server scenarios/datasets/jobs, retained raw imports/provenance, real OSM projection, observed OD rate conversion, separate server workers, deterministic/paired results, progress/cancellation/timeout/restart and report downloads pass unit/integration/browser checks. All real integration secrets are vault-derived; no live secrets are needed by local persistence/tests. Database role permissions and the production pg driver are exercised locally. Terraform now includes private PostgreSQL, Container Apps, ACR, Key Vault and separate runtime/migration identities with staged provisioning.
+
+The final 120-user run follows complete backend/UI integration and final boundary fixes: 10,963 mixed requests, 542.68 requests/s, p95 25.28 ms, zero unexpected errors over 20.20 s; 120 real scrypt logins had p95 5.06 s. Admission accepts 20 jobs and returns 100 expected overload rejections while one CPU worker runs. Exact scope/host and metrics are in testing.md and benchmarks/backend-120-users.json. This does not establish cloud capacity or calibrated traffic accuracy.
+
+The six-city data review found public references and Kaggle/Snowflake candidates but no verified complete matched observation package. TomTom live calls require the agreed Key Vault/entitlement review. Missing signal timing/classified counts and independent validation remain explicit data gaps. See backend.md, deployment.md, real-data-sources.md and data-request.md.

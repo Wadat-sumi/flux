@@ -33,12 +33,12 @@
 - [x] Three original static SVG proposals and reference study.
 - [x] Owner chose C — Layered City before UI code; recorded in design.md and ADR 003.
 - [x] Layered City UI, network editor, ramps/signals/demand forms, live canvas/metrics, save/load, and paired experiments.
-- [x] Local validation: 131 headless tests + 21 built-app browser tests + 2 isolated worker browser tests. Rendered 500+ agent benchmark recorded.
+- [x] Local validation: 219 headless tests + 26 built-app browser tests + 2 isolated worker browser tests; repeated 120-user API load and rendered 500+ agent benchmarks recorded.
 - [ ] Final Azure deployment, docs, clean tree and remote SHA verification.
 
 ## Current work
 
-The UI milestone ef54ee1 is pushed. Complete and publish the expanded feature-audit fixes and evidence, preserve the local preview, then complete Azure authentication/provisioning/deployment jointly on 6 November.
+The UI/audit milestone 321ac2c was pushed. The owner then authorized a full-stack revision, six-city data research, optional TomTom and vault-only secret handling. Local backend/UI implementation and the full test gate are complete; prepare the tested commit/push and retain the preview. Azure authentication/provisioning/deployment and live verification remain deferred to joint review.
 
 ## Blockers
 
@@ -78,3 +78,15 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Clock update: 2026-11-06T00:05:55.793240+05:30; elapsed 1.73 h, 70.27 h to hard deadline, 58.27 h to internal target.
 
 - Final audit confirmation 2026-11-06T00:10:36.666330+05:30: all 154 distinct tests pass after the final geometry scaling fix. Dependency audit reports zero advisories; Terraform fmt/validate and source/built-artifact credential scans pass. Raw session log remains untouched. Elapsed 1.81 h; 70.19 h remain before the hard deadline.
+
+## Full-stack scope revision and local completion
+
+- Owner explicitly superseded the original zero-server restriction and requested backend + revised master prompt. Preserved the exact original in master-prompt-original.md and amended the active requirements with the revision noted.
+- Added Node API, persistent PostgreSQL schema/local PGlite/production pg adapter, scrypt accounts/revocable sessions/CSRF/ownership, bounded isolated server simulations, retained datasets/results and connected browser workflows.
+- Added real OSM roads and observed OD CSV ingestion with raw files/provenance/limits; a real attributed Bengaluru road subset contains no invented demand. Researched Bengaluru/Mumbai/Chennai/Pune/Hyderabad/Delhi, public official reports and Kaggle/Snowflake candidates; no complete calibrated dataset was falsely claimed.
+- Added optional bounded TomTom adapter with synthetic contract/failure fixtures and six-city region controls. No real provider request/key/entitlement was acquired.
+- Owner required all application/deployment secrets in Key Vault. Added permanent AGENTS.md policy, local SDK/developer-identity retrieval, rejection of local plaintext credentials, staged vault/database provisioning and distinct runtime/migration identities. State remains protected/uncommitted; Azure is not provisioned.
+- Final required gate: **219 headless + 26 built-app browser + 2 isolated worker browser = 247 passing cases**, type/lint/build, dependency/credential scans and Terraform fmt/validate. Stronger scrypt uses OWASP minimum N=131072,r=8,p=1; runtime database role/schema denial and pg wire transport verified locally.
+- Repeated performance after full integration and final resource-boundary fixes: **120 real authenticated sessions**, 10,963 steady requests / 20.20 s, 542.68 requests/s, p95 25.28 ms, zero unexpected errors; 20 admitted jobs / 100 expected overload rejections / one worker. No live provider calls. Full evidence in testing.md and benchmarks/backend-120-users.json.
+- Joint Azure review, protected state, actual container build/run, Key Vault/managed identity/TomTom live checks, private managed-PostgreSQL and public HTTPS/headers remain pending. Empirical mixed-traffic calibration awaits suitable counts, signal plans and validation observations.
+- Clock at documentation update: 2026-11-06T21:20:18.017168+05:30. Original start/deadlines are unchanged. Raw continuous log remains outside Git, untouched; no other coding agents used.

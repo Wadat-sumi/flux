@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-server
+.git
+.tools
+.flux-data
+.env
+.env.*
+*.jsonl
+test-results
+playwright-report
+infra
+docs
+tests

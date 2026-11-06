@@ -1,69 +1,35 @@
-# Flux deployment
+# Flux full-stack Azure deployment
 
-Status: **not deployed**. The owner deferred Azure login and deployment to a joint review on 6 November 2026. Azure CLI is absent and no Azure credential variables were found during preflight. No subscription authentication, plan or apply has occurred. No other provider has been substituted.
+Status: **not deployed**. Azure login, cost review, plan/apply, image build/push, Key Vault values/access and public verification remain deferred to the owner's joint review. Azure CLI and a running Docker daemon were unavailable during local preflight. Terraform 1.9.8/azurerm 4.6.0 format/schema validation pass; this does not prove live networking, quotas, permissions or image startup.
 
-Flux is a built static Vite/React SPA ready for Azure Static Web Apps, using `base: '/'`, module workers and transferable buffers. There are no deployed server components. `public/staticwebapp.config.json` is copied to `dist/` by Vite and provides navigation fallback, MIME types and security headers. The approved Layered City UI and real browser worker round trip are implemented and tested. Azure deployment awaits the joint authentication review.
+## Architecture and costs
 
-## Provisioning
+A single Azure Container App serves the built React frontend and Node API on one HTTPS origin. PostgreSQL Flexible Server 16 uses a delegated private subnet/DNS and no public database access, with seven-day backups. ACR uses managed-identity image pulls. Key Vault uses RBAC, deny-by-default network rules, a VNet service endpoint and explicit administrator IP CIDRs for Portal entry. The runtime and migration identities are separate; secret-scoped read grants keep administrator credentials out of the HTTP service. Key Vault purge protection/soft deletion apply to newly created vaults. Logs retain 30 days and must contain no secrets.
 
-Terraform 1.9.8 was downloaded from the official HashiCorp release host into the ignored `.tools/` directory and verified against the published SHA-256 manifest. The provider is pinned to azurerm 4.6.0. This is a deliberate known-version pin, not a claim to use the latest release. Provider auto-registration is disabled to avoid subscription-wide mutations; `Microsoft.Web` must already be registered by the subscription owner.
+The earlier unprovisioned SWA resource/token output was removed; the full-stack Container App serves frontend and API together. A local static-only preview utility remains available. Container Apps, the registry, database, vault/logs and an always-on replica incur charges. B_Standard_B1ms is a development database default, not a measured Azure 120-user sizing recommendation. **Review costs before enable_backend=true.** One API replica/CPU worker is the supported design; do not scale out without a distributed lease/queue.
 
-Authenticate locally using Azure CLI (`az login`, then `az account show`) or a least-privilege service principal through `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID`. Do not paste secrets into chat or Git. Select the intended subscription explicitly. The provider's subscription ID comes from `subscription_id` or `ARM_SUBSCRIPTION_ID`.
+## Secret policy
 
-From `infra/terraform/`:
+All application/deployment secrets belong in Azure Key Vault. Enter real values through the Azure Portal, never chat, Git, shell arguments, .env templates or Terraform variable files. The TomTom key is not a Terraform input/resource/data lookup: Terraform stores its name/reference only. Database passwords must be read by PostgreSQL provisioning and connection secrets are derived into Key Vault, so protected Terraform state still contains sensitive database values. State/plans/tfvars are ignored and must remain private; configure an encrypted access-controlled Azure Storage backend with locking for production before handling those values. Do not print secret outputs or use shell tracing.
 
-```sh
-terraform init
-terraform fmt -check
-terraform validate
-terraform plan -out=flux.tfplan
-terraform apply flux.tfplan
-terraform output -raw url
-```
+App passwords/session tokens are hashed records, not static signing keys; no JWT/app signing key is used. No key is required for local embedded persistence. The separate migration process alone gets the administrator URL; runtime gets the flux_app URL. Both are Key Vault references. Azure resolves secrets using [managed identities](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets). Local optional TomTom access uses the Key Vault SDK with an authorized Azure CLI identity and non-secret vault URL/name; no provider key needs to be pasted into bash.
 
-Run plan/apply only after verified authentication. Inspect the plan: it must create only the new Flux resource group and its Static Web App. Check that the resource group name does not already exist. Never import, modify or destroy existing resources. Free is the default SKU; do not select Standard without the owner's cost decision. No `-auto-approve` is necessary.
+## Joint-review staged deployment
 
-West Europe is used in Microsoft's [official serverless lab](https://github.com/microsoft/hands-on-lab-serverless/blob/main/docs/workshop.md) and the [pinned provider example](https://registry.terraform.io/providers/hashicorp/azurerm/4.6.0/docs/resources/static_web_app), checked during this session. The presumed Microsoft Learn Terraform quickstart URL could not be fetched and is not relied on as evidence. Static assets are globally distributed; see [Azure's region explanation](https://learn.microsoft.com/en-us/azure/static-web-apps/faq#how-do-i-ensure-my-app-is-deployed-to-a-specific-azure-region).
+1. Authenticate Azure locally and select the exact intended subscription. Verify all provider registrations needed by the pinned provider: App, DBforPostgreSQL, Network, ContainerRegistry, ManagedIdentity, OperationalInsights and KeyVault. Automatic registration stays disabled. Inspect globally unique app/registry/vault names and confirm the dedicated resource group is new. Do not modify pre-existing resources.
+2. Review the protected-state setup and initial create-only plan. Set enable_backend=true, provision_backend_database=false, deploy_backend_app=false, backend_image=null and enable_tomtom=false. Set key_vault_admin_ip_rules to the authorized operator's explicit IPv4 /32 (non-secret). This creates the new vault/network/environment/registry/identities without reading database secret values. Apply only after joint review.
+3. In the Portal, grant the authorized human appropriate vault data-plane permission (Secrets Officer scoped to this project vault). Enter **database-admin-password** and **database-app-password** as distinct randomly generated 24+ character values. Add **tomtom-api-key** if licensed/enabled. No secret values are required in Terraform configuration. RBAC/network rules must both permit the human operator; Portal access is not automatically granted by subscription ownership.
+4. Set provision_backend_database=true. Review/apply the create-only database stage. Terraform reads the two vault passwords to provision private PostgreSQL and writes **database-runtime-url** / **database-bootstrap-url** secrets into the same vault. The runtime identity can read only runtime URL and optional TomTom; migration identity can read bootstrap/runtime URLs. Never display those secret values.
+5. Run the complete local test gate and build. Build the supplied Dockerfile and push a tested immutable image to the newly created ACR. Docker image execution has not been verified locally because its daemon was unavailable. An authorized `az acr build` may be used during the review; no cloud build has run yet. Supply backend_image as its full registry reference, preferably digest-pinned.
+6. Keep deploy_backend_app=false and apply the image stage to create the manual migration job. Start **<app_name>-migrate** in the Portal and verify successful completion. It runs node dist-server/migrate.mjs, initializes schema and the restricted flux_app role. It receives only platform Key Vault references and never prints credential-bearing errors. This is an explicit operation, not an automatic provisioner.
+7. Set deploy_backend_app=true. If the provider key was entered and entitled, set enable_tomtom=true; otherwise leave it false. Review/apply the service stage. PUBLIC_ORIGIN is the computed HTTPS Container App origin. Confirm /api/health and Key Vault resolution; validate VNet/firewall/role propagation on Azure rather than assuming fmt/validate proved them. Do not loosen default-deny controls to hide a failed reference.
+8. Keep production registration off except an explicitly reviewed owner-controlled signup window, or add a fuller identity system before broad public use. Verify login/session restoration, owner isolation, CSRF, persistence, dataset/raw-file retrieval, jobs/cancellation/restart and report downloads over HTTPS. Check real response headers, worker MIME/startup, SPA fallback, presets/editor/experiments and the returned hostname against backend_url. Run one authorized TomTom query without logging its key; record confidence and actual coverage. Repeat performance tests against the deployed tier before making cloud capacity claims.
+9. Update deployment evidence, rerun required tests/scans before committing, push and verify the remote SHA/clean tree. Leave the raw session transcript unedited outside Git.
 
-Local Terraform state contains the deployment token even though the output is sensitive. State, variable files, plans and crash logs are ignored. Use a protected Azure Storage backend for production, with state locking and access control. Only the provider lock file belongs in Git.
+Run Terraform from infra/terraform: init, fmt -check, validate, plan -out=flux.tfplan, then apply the reviewed saved plan. No plan/apply has run in this session. Do not use automatic approval for unreviewed resources. terraform.tfvars.example contains only non-secret settings. Never import/destroy existing infrastructure.
 
-## Deploy application
+## Rotation, recovery and rollback
 
-After UI implementation and verification:
+Rotate provider keys by entering a new secret version in the Portal. Versionless Container Apps references support rotation; verify actual refresh/restart and a successful request, following [Microsoft's reference guidance](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets). No provider key passes through Terraform state. Database rotation requires a reviewed coordinated update of the vault password, database provisioning/runtime URL and a successful migration role-password update before resuming jobs. Protect state during this process.
 
-```sh
-npm ci
-npm run check
-npm run build
-```
-
-Use the official Azure Static Web Apps CLI, keeping the token in an environment variable rather than a shell argument or committed file, as supported by the [official CLI reference](https://learn.microsoft.com/en-us/azure/static-web-apps/static-web-apps-cli):
-
-```sh
-SWA_CLI_DEPLOYMENT_TOKEN="$(terraform -chdir=infra/terraform output -raw deployment_token)" npx @azure/static-web-apps-cli deploy dist --env production
-```
-
-Do not enable shell tracing. Alternatively use an Azure Static Web Apps GitHub Actions deployment with its token stored only in a GitHub Actions secret. Verify the public URL, worker asset MIME type and ping/pong, SPA fallback, three presets and final commit SHA. Compare the deployed hostname to Terraform's output.
-
-## Teardown
-
-Only for the resources created by this project, inspect `terraform plan -destroy`, then run `terraform destroy` interactively. Never target pre-existing resources. No teardown has been run.
-
-## Verification record
-
-- Terraform 1.9.8, `init -backend=false -input=false`: passed; signed azurerm 4.6.0 installed and lockfile generated.
-- `terraform fmt -check`: passed.
-- `terraform validate`: passed ("The configuration is valid").
-- Azure authentication: unavailable.
-- Plan/apply: not run, authentication prerequisite unmet.
-- Skeleton/final URL: unavailable.
-- Full application production build: passed. Browser tests serve dist/ on a local QA host with the declared headers; SPA fallback, JavaScript MIME type, CSP execution blocking and hidden-file/method boundaries pass locally. These results must be repeated against the real Azure URL after deployment.
-
-## Joint review on 6 November
-
-1. Verify Azure CLI login and the intended subscription without printing tokens.
-2. Verify Microsoft.Web registration and that the dedicated Flux resource group does not exist.
-3. Run init/fmt/validate, review a create-only plan, then apply only those new Flux resources.
-4. Build and deploy dist/ using the sensitive token in an environment variable; record only the public hostname/URL.
-5. Verify live HTTPS, worker startup, three presets, ramp behavior, imported scenarios, paired results and actual response headers. Check the URL against Terraform outputs.
-6. Record results, run the required tests/security scan before the final commit, push and verify the remote SHA and clean tree. Leave the raw continuous session log outside Git.
+Use PostgreSQL backups and test a restore before production reliance. Re-deploy a previously tested immutable image for application rollback; do not roll back the database destructively. Schema version 1 is idempotent; future incompatible migrations need explicit forward/rollback planning. Interrupted jobs become failed and may be resubmitted; queued jobs resume. Delete only this project's resources after a reviewed destroy plan; vault retention/purge protection can outlive app teardown. No teardown has run.

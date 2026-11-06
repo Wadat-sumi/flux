@@ -1,0 +1,32 @@
+{
+  "measuredAt": "2026-11-06T15:46:05.275Z",
+  "users": 120,
+  "distinctAuthenticatedSessions": 120,
+  "steadySeconds": 20.201777167,
+  "workload": "120 concurrent HTTP clients: real password login; separate owned scenario; 20 s paced read/update/job-list/session mix; simultaneous job admission; health checks under CPU worker load; cancellation",
+  "database": "Filesystem-persistent PGlite (embedded PostgreSQL); Azure managed PostgreSQL not measured",
+  "steadyRequests": 10963,
+  "requestsPerSecond": 542.6750285073076,
+  "unexpectedErrors": 0,
+  "latencyMs": {
+    "p50": 13.70379099999991,
+    "p95": 25.28033300000061,
+    "p99": 35.32904199999939,
+    "max": 47.94383300000027
+  },
+  "loginP95Ms": 5058.813,
+  "healthUnderWorkerP95Ms": 0.30125000000043656,
+  "jobAdmission": {
+    "accepted": 20,
+    "expectedOverload429": 100,
+    "runningWorkers": 1
+  },
+  "host": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "logicalCpus": 10,
+    "memoryGiB": 24
+  },
+  "durationSeconds": 25.563289417,
+  "limits": "Loopback API concurrency, not 120 browsers or 120 simultaneous simulations. One bounded CPU worker, 20 active queue slots. No commercial provider calls."
+}
