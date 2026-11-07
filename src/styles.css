@@ -1,5 +1,19 @@
 @layer reset, theme, components;
 @layer components {
+  .map-dialog { width: min(1120px, calc(100vw - 24px)); }
+  .osm-map { height: min(48vh, 440px); min-height: 260px; width: 100%; border-radius: 12px; border: 1px solid var(--line); background: #e9e7e1; z-index: 0; }
+  .osm-map.drawing { cursor: crosshair; }
+  .map-tools, .map-footer { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 12px 0; }
+  .map-tools label { min-width: 150px; margin: 0; }
+  .map-size { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .map-footer label { margin: 0; max-width: 280px; }
+  .map-footer button { align-self: flex-end; }
+  .map-coordinates { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .map-coordinates button { grid-column: 1 / -1; justify-self: start; }
+  .map-dialog .source-key { color: #247a60; }
+  .map-dialog .sink-key { color: #bb4d47; }
+  .map-dialog .error { color: #902f3d; background: #fcf0f2; padding: 10px; border-radius: 8px; }
+  @media (max-width: 600px) { .map-coordinates { grid-template-columns: repeat(2, minmax(0, 1fr)); } .map-tools, .map-footer { gap: 8px; } .map-size { width: 100%; margin-left: 0; } }
   .server-dialog { width: min(960px, calc(100vw - 24px)); max-height: 90vh; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: var(--panel); overflow-y: auto; }
   .server-dialog::backdrop { background: #28273066; }
   .server-dialog h3 { margin-bottom: 10px; }
@@ -1057,8 +1071,11 @@
       display: none;
     }
     .topbar {
-      padding: 0 24px;
+      padding: 0 24px 40px;
+      height: 116px;
     }
+    .main-nav { bottom: 5px; }
+    .workspace { height: calc(100dvh - 152px); }
     .scene-heading {
       left: 24px;
     }
@@ -1099,8 +1116,8 @@
   }
   @media (max-width: 850px) {
     .topbar {
-      height: 68px;
-      padding: 0 20px;
+      height: 108px;
+      padding: 0 20px 40px;
     }
     .brand {
       font-size: 31px;
@@ -1122,7 +1139,7 @@
       display: none;
     }
     .workspace {
-      height: calc(100dvh - 104px);
+      height: calc(100dvh - 144px);
       min-height: 650px;
     }
     .scene-heading {

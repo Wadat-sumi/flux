@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ZodError } from "zod";
 import {
   parseScenario,
@@ -30,6 +30,9 @@ import type { View } from "./camera";
 import { completedAverage, experimentForExport } from "./observations";
 import { ServerPanel } from "./ServerPanel";
 import type { Provenance } from "../model/backend";
+const MapPanel = lazy(() =>
+  import("./MapPanel").then((m) => ({ default: m.MapPanel })),
+);
 
 type Mode = "simulate" | "network" | "experiments";
 const presetOptions = [
@@ -104,7 +107,9 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
 }
 
 export function App() {
-  const [showServer, setShowServer] = useState(false), [provenance, setProvenance] = useState<Provenance[]>([]);
+  const [showServer, setShowServer] = useState(false),
+    [showMap, setShowMap] = useState(false),
+    [provenance, setProvenance] = useState<Provenance[]>([]);
   const [scenario, setScenario] = useState<Scenario>(flyover),
     [preset, setPreset] = useState("flyover"),
     [mode, setMode] = useState<Mode>("simulate");
@@ -227,7 +232,17 @@ export function App() {
       const clean = parseScenario(s);
       if (record) setUndo((old) => [...old.slice(-19), scenario]);
       setScenario(clean);
-      setProvenance(old => old.map(p => ({ ...p, warnings: [...new Set([...p.warnings, "Scenario edited after import; current parameters may differ from the source observations."])].slice(0, 100) })));
+      setProvenance((old) =>
+        old.map((p) => ({
+          ...p,
+          warnings: [
+            ...new Set([
+              ...p.warnings,
+              "Scenario edited after import; current parameters may differ from the source observations.",
+            ]),
+          ].slice(0, 100),
+        })),
+      );
       setPreset("custom");
       setError("");
       setNotice("Network updated. The simulation has reset.");
@@ -321,7 +336,18 @@ export function App() {
           ))}
         </nav>
         <div className="header-actions">
-          <button className="secondary cloud-button" onClick={() => setShowServer(true)}>Data & cloud</button>
+          <button
+            className="secondary cloud-button"
+            onClick={() => setShowMap(true)}
+          >
+            Map area
+          </button>
+          <button
+            className="secondary cloud-button"
+            onClick={() => setShowServer(true)}
+          >
+            Data & cloud
+          </button>
           <button
             className="icon-button"
             title="About the model"
@@ -1110,7 +1136,9 @@ export function App() {
       <footer className="app-footer">
         <span>Interactive Agent-Based Traffic Simulation</span>
         <span className="footer-model">
-          {provenance.length ? "Imported data. Review assumptions." : "Synthetic networks. Transparent models."}
+          {provenance.length
+            ? "Imported data. Review assumptions."
+            : "Synthetic networks. Transparent models."}
         </span>
         <div>
           <button
@@ -1134,7 +1162,26 @@ export function App() {
           <button onClick={() => setShowAbout(true)}>Model notes ↗</button>
         </div>
       </footer>
-      {showServer && <ServerPanel scenario={scenario} baseline={baseline} provenance={provenance} onLoad={(s, p) => load(s, "custom", p)} onClose={() => setShowServer(false)} />}
+      {showMap && (
+        <Suspense fallback={<p role="status">Opening map…</p>}>
+          <MapPanel
+            onLoad={(result) => {
+              load(result.scenario, "custom", [result.provenance]);
+              changeMode("simulate");
+            }}
+            onClose={() => setShowMap(false)}
+          />
+        </Suspense>
+      )}
+      {showServer && (
+        <ServerPanel
+          scenario={scenario}
+          baseline={baseline}
+          provenance={provenance}
+          onLoad={(s, p) => load(s, "custom", p)}
+          onClose={() => setShowServer(false)}
+        />
+      )}
       <input
         ref={importRef}
         className="sr-only"

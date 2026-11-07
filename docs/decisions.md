@@ -33,3 +33,10 @@ Accepted 6 November 2026 at the owner's explicit direction. This supersedes the 
 Provision Azure in stages: create the project vault first, enter database passwords/TomTom directly through the Portal, then provision the database and derived connection-string secrets. The runtime/migration identities receive separate secret-scoped grants. No TomTom value is a Terraform input or lookup. Database provisioning still puts sensitive database values into protected state, which is never committed. AGENTS.md makes this policy persistent for future work. Live identity/network/rotation checks remain deferred; local contract tests do not certify Azure enforcement.
 
 The final full-stack/vault review removed the unprovisioned legacy SWA resource and deployment-token output; no existing Azure resource was changed. Container Apps now owns the sole planned public origin, avoiding an unused static deployment credential.
+
+
+## ADR 007: Direction-aware map selection
+
+Accepted 7 November 2026 at the owner's request. Use a lazy-loaded Leaflet map, direct attributed OSM raster tiles and a public read-only, fixed-host backend geometry request. Keep accounts optional for browser simulation, while account-owned saves and server jobs retain authentication/CSRF. Apply bounded selection, response size/time, concurrency, cache and quotas to the new public endpoint. CSP admits only the exact OSM tile image host; script/connect restrictions stay same-origin.
+
+Clip directed roads to the selected rectangle and use separate boundary entry/exit nodes per directed segment. This preserves the existing single-role node schema, both directions of two-way roads, and avoids artificial outside turns. Retain grade separation; internal dead ends are not exits. Only reachable entry/exit pairs get explicitly synthetic starter demand. Document sparse-way API coverage, sub-metre simplification, operational minimum lengths, missing controls/turn restrictions and calibration limits. See map-selection.md.

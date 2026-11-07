@@ -290,6 +290,12 @@ export function NetworkCanvas(props: Props) {
               Math.max(0, (now - current.current.received) / (1000 / 30)),
             )
           : 1;
+      const layerLabels = new Map<number, RoadEdge>();
+      for (const edge of sorted) {
+        const previous = layerLabels.get(edge.layer);
+        if (!previous || edge.length > previous.length)
+          layerLabels.set(edge.layer, edge);
+      }
       for (const e of sorted) {
         const a = getNode(e.from),
           b = getNode(e.to),
@@ -399,7 +405,13 @@ export function NetworkCanvas(props: Props) {
             );
           }
         }
-        if (!p.editing && scale > 0.4) {
+        if (
+          !p.editing &&
+          scale > 0.4 &&
+          (sorted.length <= 8 ||
+            e.ramp ||
+            layerLabels.get(e.layer)?.id === e.id)
+        ) {
           const tagPosition = elevated ? 0.48 : 0.72;
           const px = pa[0] + (pb[0] - pa[0]) * tagPosition + 15,
             py = pa[1] + (pb[1] - pa[1]) * tagPosition + (elevated ? -25 : 25);
@@ -441,11 +453,11 @@ export function NetworkCanvas(props: Props) {
           ctx.fillText(`${n.id} · L${n.layer}`, x + 10, y - 10);
         } else if (n.kind === "source" || n.kind === "sink") {
           ctx.font = "600 10px system-ui";
-          ctx.fillStyle = "#71677D";
+          ctx.fillStyle = n.kind === "source" ? "#247a60" : "#bb4d47";
           ctx.fillText(
-            n.kind === "source" ? "IN ↗" : "OUT ↗",
+            n.kind === "source" ? "SOURCE" : "SINK",
             x + 10,
-            y - 15,
+            n.kind === "source" ? y - 15 : y + 17,
           );
         }
         if (n.control === "signal")

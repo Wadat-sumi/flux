@@ -23,3 +23,6 @@ Owner follow-up: the first 120-user measurement is preliminary. Repeat performan
 Final local gate: 247 automated cases pass plus the repeated 120-user test after all integration/boundary fixes. Real secrets are exclusively Key Vault-derived; AGENTS.md records the permanent project policy. No secret values were acquired or provisioned.
 
 - [ ] Acquire matched classified counts/turning observations, actual signal stages/timings and independent travel-time/queue measurements for a selected corridor; extend/calibrate/validate the model before real-city accuracy claims. The six-city online source review and minimum data request are complete.
+
+
+Owner follow-up, 7 November: add interactive OSM area selection, automatic direction-aware boundary sources/sinks and a runnable synthetic starter demand. Implementation and positive/negative/edge, HTTP/security and browser checks completed; final performance evidence is recorded in testing.md. Map geometry does not complete the pending empirical-calibration task.

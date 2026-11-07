@@ -9,6 +9,11 @@ import {
 } from "../src/model/schema";
 import type { ImportedData, Provenance } from "../src/model/backend";
 import { Network } from "../src/engine/network";
+import {
+  clipMapRoads,
+  projectPoint,
+  type MapBounds,
+} from "../src/model/map-area";
 
 const metadata = z
   .object({
@@ -81,7 +86,10 @@ function provenance(
     warnings: [...warnings].slice(0, 100),
   };
 }
-export function importOsm(input: unknown): ImportedData {
+export function importOsm(
+  input: unknown,
+  area?: { bounds: MapBounds; syntheticRate: number },
+): ImportedData {
   const { text, metadata: meta } = osmInputSchema.parse(input);
   if (Buffer.byteLength(text) > 2_000_000)
     throw new Error("OSM file exceeds 2 MB");
@@ -215,14 +223,13 @@ export function importOsm(input: unknown): ImportedData {
           6371000 *
           Math.cos((lat0 * Math.PI) / 180),
         y = ((-(n.lat - lat0) * Math.PI) / 180) * 6371000;
-      if (Math.abs(x) > 10000 || Math.abs(y) > 10000)
+      if (!area && (Math.abs(x) > 10000 || Math.abs(y) > 10000))
         throw new Error(
           "OSM extract is too large; select a smaller local area",
         );
       nodes.set(key, {
         id: key,
-        x,
-        y,
+        ...(area ? projectPoint(n.lat, n.lon, area.bounds) : { x, y }),
         layer,
         kind: "junction",
         control: "priority",
@@ -236,7 +243,7 @@ export function importOsm(input: unknown): ImportedData {
       const a = nodes.get(`osm_${way.nodes[i - 1]}_l${layer}`)!,
         b = nodes.get(`osm_${way.nodes[i]}_l${layer}`)!;
       const distance = Math.hypot(a.x - b.x, a.y - b.y);
-      if (a.id === b.id || distance < 1)
+      if (!area && (a.id === b.id || distance < 1))
         throw new Error(
           "Degenerate OSM segment; simplify the extract before importing",
         );
@@ -268,7 +275,7 @@ export function importOsm(input: unknown): ImportedData {
         edges.push(road(b.id, a.id, direction === -1 ? total : backward, "b"));
     }
   }
-  const scenario: Scenario = parseScenario({
+  const rawScenario: Scenario = {
     schemaVersion: 1,
     generator: "Flux",
     name: "Imported OpenStreetMap roads",
@@ -280,7 +287,56 @@ export function importOsm(input: unknown): ImportedData {
     duration: 300,
     seed: 42,
     maxVehicles: 3000,
-  });
+  };
+  if (area) {
+    // Real OSM geometry can contain sub-metre shape points. Collapse only connected,
+    // same-layer points before clipping, rather than inventing connections at crossings.
+    const parent = new Map<string, string>();
+    const root = (id: string): string => {
+      let current = id;
+      while (parent.has(current)) current = parent.get(current)!;
+      return current;
+    };
+    for (const e of edges) {
+      const a = nodes.get(e.from)!,
+        b = nodes.get(e.to)!;
+      if (Math.hypot(a.x - b.x, a.y - b.y) < 1) {
+        const from = root(e.from),
+          to = root(e.to);
+        if (from !== to) parent.set(to, from);
+      }
+    }
+    if (parent.size) {
+      warnings.add(
+        "Connected sub-metre shape points are collapsed to meet the engine's 1 m endpoint separation; short remaining roads use a 10 m operational minimum.",
+      );
+      rawScenario.nodes = [...nodes.values()].filter(
+        (n) => root(n.id) === n.id,
+      );
+      rawScenario.edges = edges
+        .map((e) => ({ ...e, from: root(e.from), to: root(e.to) }))
+        .filter((e) => e.from !== e.to);
+    }
+    const scenario = clipMapRoads(rawScenario, area.bounds, area.syntheticRate);
+    warnings.delete(
+      "OSM geometry is observed map data; no traffic demand is inferred. Import OD observations or configure synthetic demand separately.",
+    );
+    warnings.add(
+      `Starter demand is synthetic: ${area.syntheticRate} total vehicles/hour, split evenly across reachable entries, each routed to its furthest reachable boundary exit. Edit OD demand or import observations for calibration.`,
+    );
+    warnings.add(
+      "Terminals follow directed boundary crossings; two-way roads have separate entry and exit nodes. Internal dead ends are not exits. Isolated entries without an exit have no demand.",
+    );
+    warnings.add(
+      "The OSM map endpoint retrieves ways with nodes in a 100 m buffer. Very sparse ways crossing the entire buffered area without a node may be absent. Inspect the road coverage before interpreting results.",
+    );
+    return {
+      scenario,
+      provenance: provenance("osm", text, meta, warnings),
+      summary: `${scenario.nodes.length} nodes, ${scenario.edges.length} directed roads; ${scenario.nodes.filter((n) => n.kind === "source").length} sources and ${scenario.nodes.filter((n) => n.kind === "sink").length} sinks on the boundary. Synthetic demand: ${area.syntheticRate} vehicles/hour.`,
+    };
+  }
+  const scenario = parseScenario(rawScenario);
   const network = new Network(scenario),
     ordered = [...scenario.nodes].sort((a, b) => a.x - b.x || a.y - b.y);
   let selected = false;

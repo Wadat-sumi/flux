@@ -90,3 +90,13 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Repeated performance after full integration and final resource-boundary fixes: **120 real authenticated sessions**, 10,963 steady requests / 20.20 s, 542.68 requests/s, p95 25.28 ms, zero unexpected errors; 20 admitted jobs / 100 expected overload rejections / one worker. No live provider calls. Full evidence in testing.md and benchmarks/backend-120-users.json.
 - Joint Azure review, protected state, actual container build/run, Key Vault/managed identity/TomTom live checks, private managed-PostgreSQL and public HTTPS/headers remain pending. Empirical mixed-traffic calibration awaits suitable counts, signal plans and validation observations.
 - Clock at documentation update: 2026-11-06T21:20:18.017168+05:30. Original start/deadlines are unchanged. Raw continuous log remains outside Git, untouched; no other coding agents used.
+
+
+## Map selection and automatic boundary terminals
+
+- Owner requested OSM map-area selection and automatic source/sink assignment using road direction. Added lazy map UI, six-city jumps, drawn/keyboard rectangles, bounded public geometry adapter, preview markers and import to the shared simulator. No key or account is needed for this read-only map flow.
+- Directed clipping handles two-way/reverse roads, boundaries/corners/tangencies, re-entry, isolated entries, dead ends and grade separation. Synthetic starter rates and inferred/unsupported details are disclosed. No observed traffic counts or signal timings were invented.
+- Verified a live Bengaluru selection (33 nodes/38 roads/two sources/three sinks) in the browser and advanced the imported network. Fixed observed sub-metre geometry, tablet header occlusion and dense layer-label clutter.
+- Final gate before code check-in: 255 headless + 31 app-browser + 2 worker-browser = 288 passing cases, type/lint/build, source/build credential scan and zero dependency advisories. Full-stack 120-user performance repeated: 11,436 requests/20.20s, 566.18/s, p95 19.43ms, zero unexpected errors; 20 accepted jobs / 100 expected 429 / one worker. No external provider requests in load tests.
+- Updated master prompt, API/security/decision/usage/audit/test records. Azure remains deferred; original prompt/raw continuous log remain untouched, with no other coding agents used.
+- Clock: 2026-11-07T16:02:26.320226+05:30, elapsed 41.67 h; 18.33 h to internal target and 30.33 h to hard deadline. Original start and deadlines are unchanged.

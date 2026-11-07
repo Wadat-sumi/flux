@@ -20,6 +20,7 @@ Visit http://127.0.0.1:5173. Vite proxies /api to the Node backend on 3001. Loca
 ## Use
 
 - **Simulate:** four presets, seed/demand/horizon settings, run/pause/step/advance/reset, playback speed, isometric/plan camera, layers and congestion, real metrics and detailed charts.
+- **Map area:** choose Bengaluru, Mumbai, Chennai, Pune, Hyderabad or Delhi; pan/zoom and draw a 50–800 m rectangle, preview live OSM roads and automatic directed boundary sources/sinks, then load the section into the simulation. No account or API key is needed. Starter traffic is explicitly synthetic and editable; see [map selection](docs/map-selection.md).
 - **Network:** create/drag/delete nodes and roads, configure lanes/dimensions/speeds/priorities/signals/layers, explicit ramps, source/sink roles and OD demand, with undo.
 - **Experiments:** at-grade/flyover or one-/two-lane bottleneck pairs, or capture/edit a baseline. Both runs receive identical scheduled demand and seed, with aligned charts and report export.
 - **Data & cloud:** local account signup/login, owner-scoped server scenario library, retained OSM/observed-count imports with source/license/time/hash, server jobs/progress/cancellation/history and report downloads. Jobs continue after closing the browser. Production registration defaults off.

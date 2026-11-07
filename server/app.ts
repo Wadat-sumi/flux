@@ -32,6 +32,7 @@ import {
   demandInputSchema,
 } from "./imports";
 import { TomTom } from "./tomtom";
+import { OsmMap } from "./osm-map";
 
 export interface AppOptions {
   db: Database;
@@ -43,6 +44,7 @@ export interface AppOptions {
   requestLimit?: number;
   authLimit?: number;
   tomtom?: TomTom;
+  osmMap?: OsmMap;
 }
 const identifier =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -56,7 +58,7 @@ const mime: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 const csp =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; font-src 'self'; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 function json(res: ServerResponse, code: number, value: unknown): void {
   res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(value));
@@ -88,6 +90,7 @@ export async function createApp(options: AppOptions) {
   const { db } = options,
     jobs = new Jobs(db, options.jobTimeoutMs);
   const tomtom = options.tomtom ?? new TomTom();
+  const osmMap = options.osmMap ?? new OsmMap();
   const requests = new RateLimiter(options.requestLimit ?? 30000, 60000),
     auth = new RateLimiter(options.authLimit ?? 1000, 15 * 60000),
     authAccount = new RateLimiter(10, 15 * 60000),
@@ -139,6 +142,8 @@ export async function createApp(options: AppOptions) {
     const method = req.method ?? "GET",
       ip = req.socket.remoteAddress ?? "unknown";
     requests.check(ip);
+    if (method === "POST" && path === "/api/maps/osm-area")
+      return json(res, 200, await osmMap.area(ip, await body(req)));
     if (method === "GET" && path === "/api/health") {
       await db.query("SELECT version FROM flux_migrations WHERE version=1");
       return json(res, 200, {

@@ -109,3 +109,20 @@ Gates declared in scripts/load-test.ts: steady p95 <1 s, p99 <2 s, at least 100 
 Live Key Vault identity/firewall/rotation, provider entitlement/coverage, full Docker image build/run/scan, managed PostgreSQL backups/restore, Azure HTTPS/headers and deployment-tier load tests remain pending the joint Azure review. No matched six-city empirical calibration dataset has been acquired; public source research and minimum data needs are documented separately.
 
 Final infrastructure-only cleanup removed the unprovisioned legacy SWA/deployment-token resource after the application gate; Terraform fmt/validate and secret/diff checks passed again. The app runtime source and compiled server hash are unchanged. The native in-app browser also showed **Server connected** in Data & cloud on the running full-stack preview; screenshots/backend-workspace.png records that state without credentials.
+
+
+## OpenStreetMap selection gate — 7 November 2026
+
+After the owner's map/boundary-terminal request, **255 headless tests in 15 files + 31 built-app browser tests + 2 isolated worker browser tests = 288 distinct passing cases**. Type checking, lint, client/server build, credential-pattern scan and dependency audit (zero reported vulnerabilities) pass. Tests ran before this code commit. Compiled backend SHA-256: `0268855b6268cd3838d6d78eeec9f9745937d0fc290c453d3f84a7570c2ac01f`. Terraform source was unchanged; Azure remains deferred.
+
+Map coverage includes direction/reverse/two-way terminals, exact edges/corners/tangencies, inside dead ends, disconnected/re-entering roads, grade separation, sub-metre point collapse, zero/synthetic demand, deterministic conservation, malformed/injected bounds, response bytes/type/status, fixed host, cache eviction/global/IP quotas/concurrency, anonymous read-only fetch followed by authenticated save/job, all six city shortcuts, drawn/keyboard selection, stale-preview invalidation, provider recovery, phone layout, inert provenance and unobstructed header controls at 1280/1100/1024/852/834/390 pixels. Automated provider/tiles are synthetic fixtures; public services are not called by regression/load tests.
+
+Separate manual live OSM browser verification selected the default 260 m Bengaluru area: 33 nodes, 38 directed roads, two sources and three sinks. Loading and advancing 20 s produced four active trips, zero rejected trips. The screenshot in screenshots/osm-area-selection.png records the actual map/terminal preview. This is a connectivity check, not measured traffic calibration. Dense-road label clutter and a tablet header overlap were observed and fixed; the final browser gate includes the accessibility regression.
+
+Rendered performance again passes with 544–552 corridor and 624–630 signal-network agents: 60 FPS and 30.18/30.16 ticks/s, p95 frame 16.70/16.70 ms. The map library is loaded on demand; the main bundle remains about 380 KB minified.
+
+### Repeated 120-user test after map/UI integration
+
+Measured `2026-11-07T10:31:14.153Z` with the same real-password, distinct-account, filesystem-persistent workload documented above. 11,436 steady requests / 20.20 s = **566.18 requests/s**, p50 **7.41 ms**, p95 **19.43 ms**, p99 **33.22 ms**, **zero unexpected errors**. Simultaneous scrypt-login p95 5.97 s; CPU-worker-active health p95 0.252 ms. Job saturation: twenty accepted, one hundred expected 429 rejections, one CPU worker. All declared thresholds passed. Raw report: benchmarks/backend-120-users.json.
+
+This short loopback API workload excludes external OSM/TomTom calls and is not 120 simultaneous map downloads, 120 browser renderers, 120 CPU simulations, a soak test or evidence of Azure capacity. The new public map endpoint deliberately applies lower provider/conversion quotas; production service sizing and live Azure checks remain pending.

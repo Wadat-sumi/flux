@@ -69,3 +69,10 @@ Accounts/session restore/revocation, owner-scoped server scenarios/datasets/jobs
 The final 120-user run follows complete backend/UI integration and final boundary fixes: 10,963 mixed requests, 542.68 requests/s, p95 25.28 ms, zero unexpected errors over 20.20 s; 120 real scrypt logins had p95 5.06 s. Admission accepts 20 jobs and returns 100 expected overload rejections while one CPU worker runs. Exact scope/host and metrics are in testing.md and benchmarks/backend-120-users.json. This does not establish cloud capacity or calibrated traffic accuracy.
 
 The six-city data review found public references and Kaggle/Snowflake candidates but no verified complete matched observation package. TomTom live calls require the agreed Key Vault/entitlement review. Missing signal timing/classified counts and independent validation remain explicit data gaps. See backend.md, deployment.md, real-data-sources.md and data-request.md.
+
+
+## OpenStreetMap area selection — 7 November 2026
+
+Implemented Map area with six-city shortcuts, interactive/keyboard rectangle selection, live fixed-host OSM geometry, directional clipping and automatic entry sources/exit sinks. Two-way roads use separate terminals; internal dead ends, exact borders/corners, tangencies, disconnected entries, re-entry and layers are covered. Preview markers and synthetic-rate selection feed the existing browser and authenticated server simulations. Main/city/header controls remain accessible on tablet/phone; dense networks avoid repeated layer badges. See map-selection.md for steps, retention and model/provider limits.
+
+Final gate: 288 automated cases pass, including local penetration/security, browser/worker and rendered-performance checks; repeated 120 real authenticated API users produced zero unexpected errors. Public provider availability, sparse-way coverage, actual counts/signal stages, mixed-vehicle calibration and Azure deployment remain explicit limits rather than completed accuracy claims.

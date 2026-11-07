@@ -2,7 +2,7 @@ QUEST Lab Full Stack AI Pre-doctoral application, Shivarshi Shivansh, 5 Nov 9:30
 
 # MASTER EXECUTION PROMPT — QUEST Lab Traffic Simulation
 
-Revision: 6 November 2026. The owner explicitly expanded Flux to a full-stack application with real-data ingestion and server-side simulation, and required performance testing with more than 100 concurrent users. This revision supersedes the original zero-server restriction. The exact original is preserved in `docs/master-prompt-original.md`; the raw session transcript remains untouched.
+Revision: 7 November 2026 (full-stack revision accepted 6 November). The owner explicitly expanded Flux to a full-stack application with real-data ingestion and server-side simulation, and required performance testing with more than 100 concurrent users. This revision supersedes the original zero-server restriction. The exact original is preserved in `docs/master-prompt-original.md`; the raw session transcript remains untouched.
 
 ## 0. Mission, Operating Mode, and Constraints
 
@@ -585,3 +585,8 @@ Start now.
 5. Make the first commit and push to verify remote access.
 
 Begin implementation.
+
+
+## 17. Owner-requested OpenStreetMap area selection — 7 November 2026
+
+Provide an interactive OSM map with city shortcuts and user-selected road sections. Clip the directed road geometry to the selection and automatically assign sources where traffic enters, sinks where traffic exits, including distinct terminals for both directions of a two-way road. Internal dead ends must not become boundary exits. Preserve grade separation, reject unreachable/oversized selections and show detected terminals before loading into the existing simulator. Disclose all inferred lane/speed/control and synthetic demand assumptions. OSM geometry is not measured traffic demand or a calibrated city forecast. No new secret is required for public OSM services. Keep tile attribution visible and honor public-service limits. Apply the existing full test-before-commit and >100-user repeat-performance requirements.
