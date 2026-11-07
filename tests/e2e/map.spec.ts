@@ -280,6 +280,8 @@ test("roundabout imports as one editable structure and labels toggle without res
     .getByRole("button", { name: "Use area in simulation", exact: true })
     .click();
   await expect(page.locator("canvas")).toHaveAttribute("data-roundabouts", "1");
+  await page.getByRole("button", { name: "Plan view", exact: true }).click();
+  await page.screenshot({ path: "docs/screenshots/roundabout-geometry.png" });
   await page.getByText("Demand & simulation settings", { exact: true }).click();
   await page
     .getByRole("button", { name: "Advance 20 seconds", exact: true })
@@ -331,6 +333,79 @@ test("roundabout imports as one editable structure and labels toggle without res
     .getByRole("button", { name: "↶ Undo last network change", exact: true })
     .click();
   await expect(page.locator("canvas")).toHaveAttribute("data-roundabouts", "1");
+});
+test("map-to-server shortcut reviews the selected network before submitting a retained run", async ({
+  page,
+}) => {
+  await openMap(page);
+  const use = page.getByRole("button", {
+    name: "Use area on server",
+    exact: true,
+  });
+  await expect(use).toBeDisabled();
+  await coordinates(page);
+  const imported = importOsm(
+    { text: JSON.stringify(roundaboutFixture()), metadata: mapMetadata },
+    { bounds: mapBounds, syntheticRate: 900 },
+  );
+  await page.route("**/api/maps/osm-area", (route) =>
+    route.fulfill({ json: imported }),
+  );
+  await page
+    .getByRole("button", { name: "Preview roads & terminals", exact: true })
+    .click();
+  await use.click();
+  await expect(
+    page.getByRole("dialog", { name: "OpenStreetMap area selection" }),
+  ).toHaveCount(0);
+  const summary = page.getByRole("region", {
+    name: "Network to run on server",
+  });
+  await expect(summary).toContainText("12 directed roads · 1 roundabouts");
+  await expect(summary).toContainText("fresh run from time zero");
+  let submissions = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/api/jobs"))
+      submissions++;
+  });
+  await page
+    .getByLabel("Email", { exact: true })
+    .fill(`map-server-${crypto.randomUUID()}@flux.test`);
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill("Browser-test-passphrase!");
+  await page
+    .getByRole("button", { name: "Create account", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Run current on server", exact: true }),
+  ).toBeInViewport();
+  expect(await (await page.request.get("/api/jobs")).json()).toEqual([]);
+  expect(submissions).toBe(0);
+  await page
+    .getByRole("button", { name: "Run current on server", exact: true })
+    .click();
+  await expect(page.getByLabel("Server simulation result")).toContainText(
+    "completed · 100%",
+    { timeout: 20000 },
+  );
+  const jobs = await (await page.request.get("/api/jobs")).json();
+  const job = await (await page.request.get(`/api/jobs/${jobs[0].id}`)).json();
+  expect(job.input.scenario).toEqual(imported.scenario);
+  expect(job.input.provenance).toEqual([imported.provenance]);
+  expect(job.results[0].metrics.generated).toBeGreaterThan(0);
+  expect(submissions).toBe(1);
+  await page
+    .getByRole("button", { name: "Close data workspace", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Run on server", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Run current on server", exact: true }),
+  ).toBeInViewport();
+  expect(submissions).toBe(1);
+  await page.screenshot({ path: "docs/screenshots/map-server-run.png" });
 });
 test("drawing stays inside the map and preserves Leaflet layout classes across toggles and sizes", async ({
   page,

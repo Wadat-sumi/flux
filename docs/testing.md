@@ -2,7 +2,7 @@
 
 Every code commit requires positive/negative/boundary unit tests, integration, performance and security checks. UI commits additionally require production-build browser tests. The current local application passes this gate. Azure verification is separately deferred by the owner.
 
-## Latest verified milestone, 6 November 2026
+## Initial verified UI milestone, 6 November 2026
 
 Environment: macOS arm64, 10 logical CPUs, 24 GiB RAM, Node 24.12.0, TypeScript 6.0.3, Vite 8.3.6, Playwright 1.64.1. Application tests use full Chromium's new headless mode; the isolated worker tests also pass in Chromium headless shell. No other coding agents were used.
 
@@ -150,3 +150,13 @@ The owner reproduced two UI failures: drawing mode removed Leaflet layout classe
 Final full gate after these fixes: **285 headless + 36 built-app browser + 2 isolated worker = 323 distinct passing cases**, plus type/lint/build, credential-pattern scan and zero dependency advisories. Desktop/tablet/phone containment and unblocked controls pass. New mouse/touch drawing regressions pass. Native in-app-browser press-drag selected **326 × 256 m** without panning and successfully fetched **4 terminals / 2 major directed roads / 2 sources / 2 sinks**; screenshot: screenshots/map-drag-selection.png.
 
 The latest repeated 120-user workload measured `2026-11-07T11:34:22.985Z` after the final integrated UI/backend build: 11,407 mixed requests / 20.17 s, **565.61/s**, p50/p95/p99 **8.11/18.46/32.63 ms**, **zero unexpected errors**. Actual scrypt-login p95 5.47 s; active-worker health p95 0.236 ms; twenty admitted jobs, one hundred expected overload 429 responses, one worker. All thresholds pass. Raw benchmark files now contain this latest gate's results. External-provider calls, 120 browser renderers, a soak and Azure sizing remain outside this workload.
+
+## Roundabout display and map-to-server review — 7 November 2026
+
+Full gate after the final integrated UI build: **290 headless tests in 17 files + 37 built-app browser cases + 2 isolated worker cases = 329 distinct passing cases**. Type/lint/build, positive/negative/edge unit tests, integration, performance, local penetration/security regressions, credential-pattern scan and dependency audit (zero reported vulnerabilities) pass before code check-in. Backend source is unchanged; compiled SHA-256 remains `c439e2d0ddefef56f411e74517838e7a1fac9f9c10cec24b6597e4680646b026`.
+
+New unit cases verify mapped curved/oval islands, a concave interior anchor, zero-area/absent groups, tiny multilane display caps and no numerical-geometry mutation. Browser coverage verifies map-to-server review before/after sign-in, no automatic submission, a completed persisted job with the exact selected geometry/groups/provenance and the authenticated current-network shortcut. Existing mouse/touch drawing and phone/security regressions pass. Synthetic roundabout screenshot: screenshots/roundabout-geometry.png. The native in-app preview independently showed **Server connected** and the fresh-run review without a submission; screenshot: screenshots/server-run-review.png. No native account credentials were entered.
+
+Rendered corridor/signal/curved workloads again pass at **60 FPS**, approximately **30.17 ticks/s**, with 544–552 / 624–630 / 544–552 on-road agents and p95 frame 16.70 ms. The current 800 m selection cap is unchanged and has not been established as a measured capacity maximum. Larger sparse/dense area limits remain unbenchmarked.
+
+Repeated 120-user workload measured `2026-11-07T11:59:39.892Z`: **120 distinct real authenticated sessions**, **11,475 requests / 20.18 s**, **568.57/s**, p50/p95/p99 **7.27/17.32/30.83 ms**, **zero unexpected errors**. Actual simultaneous scrypt-login p95 **5.57 s**; active-worker health p95 **0.314 ms**. Twenty jobs admitted, one hundred expected overload 429 responses, one CPU worker. All declared thresholds pass. Filesystem-persistent PGlite, 200 ms think time and the mixed read/update/history/session workload are unchanged. This remains a short loopback API test, excluding external providers, 120 browsers/map downloads, concurrent CPU jobs, soak and Azure capacity. Latest raw evidence: benchmarks/backend-120-users.json and browser*.json. Azure review/deployment and empirical calibration remain pending.

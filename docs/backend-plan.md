@@ -36,3 +36,6 @@ Owner follow-up, 7 November: add interactive OSM area selection, automatic direc
 - [ ] Select the exact nearby junctions from overlapping source coverage and acquire matched demand, controls and independent validation observations with verified permission and dates. Other structure entity types are suggestions, not completed work.
 
 - [x] Fix map drawing overflow and press-drag panning; verify mouse/touch selection, containment and cancellation before the final tested commit.
+- [x] Clarify roundabout geometry with a mapped island, width caps, contrast and less label overlap; preserve simulation physics.
+- [x] Add direct map/current-network server-run review with explicit submission and retained geometry/provenance.
+- [ ] Benchmark representative larger sparse/dense networks before designing a larger bounded server-import mode. The current 800 m selection cap is conservative and unchanged.

@@ -23,6 +23,7 @@ interface Props {
   scenario: Scenario;
   baseline: Scenario;
   provenance: Provenance[];
+  focus?: "library" | "run";
   onLoad(s: Scenario, p: Provenance[]): void;
   onClose(): void;
 }
@@ -36,14 +37,43 @@ function download(value: unknown, name: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function NetworkSummary({ scenario }: { scenario: Scenario }) {
+  return (
+    <div
+      className="server-result"
+      role="region"
+      aria-label="Network to run on server"
+    >
+      <strong>{scenario.name}</strong>
+      <p>
+        {scenario.nodes.length} nodes · {scenario.edges.length} directed roads ·{" "}
+        {scenario.roundabouts?.length ?? 0} roundabouts
+      </p>
+      <p>
+        {scenario.duration} simulated seconds · seed {scenario.seed} ·{" "}
+        {scenario.demand
+          .reduce((total, d) => total + d.rate, 0)
+          .toLocaleString()}{" "}
+        vehicles/hour configured
+      </p>
+      <p className="hint">
+        Starts a fresh run from time zero with this network, geometry, demand
+        and source records. The running browser traffic is not transferred.
+        Review the settings, then submit below.
+      </p>
+    </div>
+  );
+}
 export function ServerPanel({
   scenario,
   baseline,
   provenance,
+  focus = "library",
   onLoad,
   onClose,
 }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const simulationSection = useRef<HTMLElement>(null);
   const sessionVersion = useRef(0);
   const [user, setUser] = useState<User | null>(null),
     [connected, setConnected] = useState(false),
@@ -120,6 +150,10 @@ export function ServerPanel({
     }
   }, [user]);
   useEffect(() => {
+    if (user && focus === "run")
+      simulationSection.current?.scrollIntoView({ block: "start" });
+  }, [user, focus]);
+  useEffect(() => {
     if (!user || !jobs.some((j) => ["running", "queued"].includes(j.status)))
       return;
     let live = true;
@@ -186,6 +220,7 @@ export function ServerPanel({
           {error}
         </p>
       )}
+      {!user && focus === "run" && <NetworkSummary scenario={scenario} />}
       {!user ? (
         <form
           className="server-auth"
@@ -657,8 +692,9 @@ export function ServerPanel({
               </div>
             )}
           </section>
-          <section className="server-section">
+          <section className="server-section" ref={simulationSection}>
             <h3>Server simulations</h3>
+            <NetworkSummary scenario={scenario} />
             <p className="hint">
               Jobs run in an isolated server worker. One job runs at a time; up
               to 20 active jobs globally and three per account. Each job has a

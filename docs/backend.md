@@ -37,6 +37,8 @@ Private-record mutation requests require the HttpOnly session cookie plus X-Flux
 
 ## Execution and limits
 
+**Map area → Preview roads & terminals → Use area on server → sign in → Run current on server** sends the selected normalized network, curved geometry, roundabout groups, configured demand and provenance in the job request. **Run on server** in the simulation panel opens the same review for an edited network. Opening the review never auto-submits. A separate scenario save or JSON export is optional: the job retains its own immutable input snapshot. Execution starts from time zero rather than resuming browser vehicle state. Server execution currently means the local Node backend, not an already deployed Azure service.
+
 The shared deterministic engine executes inside a separate Node worker thread, with a 256 MB old-generation ceiling and 120-second job timeout. One job runs at once; at most 20 queued/running globally and three per user. Histories retain at most 200 jobs per account until deletion. Comparison uses identical seed, generated arrivals and horizon. Missing completed-trip observations serialize as null.
 
 This first release supports **one API replica**, enforced in Terraform. In-process admission is serialized. Do not scale out without a transactional distributed lease/queue; rolling replacement may interrupt a run, which is explicitly marked failed rather than reported complete. Restart recovery marks interrupted running jobs failed and resumes queued jobs. Closing the browser does not cancel server jobs. Resource bounds reject excess work; 120 API users does not mean 120 parallel simulation workers.

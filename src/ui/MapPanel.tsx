@@ -37,9 +37,11 @@ const leafletBounds = (b: MapBounds): L.LatLngBoundsExpression => [
 ];
 export function MapPanel({
   onLoad,
+  onServer,
   onClose,
 }: {
   onLoad(result: ImportedData): void;
+  onServer(result: ImportedData): void;
   onClose(): void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null),
@@ -491,6 +493,18 @@ export function MapPanel({
           }}
         >
           Use area in simulation
+        </button>
+        <button
+          className="secondary"
+          disabled={!result || busy || drawing}
+          onClick={() => {
+            if (result) {
+              onServer(result);
+              onClose();
+            }
+          }}
+        >
+          Use area on server
         </button>
       </div>
       <p role="status" aria-live="polite">

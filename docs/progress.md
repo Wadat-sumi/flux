@@ -38,7 +38,7 @@
 
 ## Current work
 
-The UI/audit milestone 321ac2c was pushed. The owner then authorized a full-stack revision, six-city data research, optional TomTom and vault-only secret handling. Local backend/UI implementation and the full test gate are complete; prepare the tested commit/push and retain the preview. Azure authentication/provisioning/deployment and live verification remain deferred to joint review.
+The full-stack backend and map/drawing milestone 1e678fc was pushed. Roundabout display and direct selected-network server review now pass the 329-case full gate and repeated 120-user workload; prepare the tested commit/push and retain the preview. The owner chose a Bengaluru corridor with 2–4 junctions for dataset research. Azure authentication/provisioning/deployment, live provider verification, empirical calibration and larger-area benchmarks remain pending; Azure work is deferred to joint review.
 
 ## Blockers
 
@@ -118,3 +118,11 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Final full gate: **323 distinct cases** (285 headless/36 app browser/2 worker), type/lint/build, security regressions, 500+ straight/signal/curved rendering, secret scan and dependency audit pass. Repeated 120-user API test: 11,407 requests/20.17s, 565.61/s, p95 18.46ms, zero unexpected errors; 20 admitted/100 expected 429/one worker. No external providers in the load workload.
 - Owner chose Bengaluru corridor with 2–4 junctions for data research. Retrieved the public OpenCity BTP timing catalogue (124 PDF resources) and visually inspected a Palmgroove/Richmond sheet; authority/current effective dates and reuse rights still need confirmation. Reviewed BMRCL survey summary and historical research; no complete current matched counts/controls/validation pack has been acquired. Candidate review is documented, raw research files stay ignored and no values are auto-ingested.
 - Local app remains running; Azure deferred; no other coding agents, new coding chats, raw-log edits or real secret values. Clock 2026-11-07T17:06:23.506677+05:30, elapsed 42.74 h; 17.26 h to target, 29.26 h to hard deadline.
+
+## Clear roundabout geometry and selected-network server execution
+
+- Made mapped ring islands visible with contrasting pavement/kerbs/arrows, width/glyph caps, reduced badge overlap and no decorative buildings inside rings. Oval/irregular outlines remain mapped; numerical lengths, lanes, routing and physics are unchanged.
+- Added **Use area on server** after preview and **Run on server** beside playback. The review shows network size, demand, duration and seed before explicit submission. Authentication and retained job geometry/groups/provenance pass the browser workflow. A server job starts at time zero; it does not transfer live browser agent state. Server execution is currently local Node, not Azure.
+- Explained the conservative 800 m cap and independent raw-data/graph/worker limits. The question did not authorize removing limits; they remain unchanged. Recorded larger sparse/dense server-mode benchmarking as pending.
+- Full gate: **329 distinct cases** (290 headless/37 app-browser/2 worker), type/lint/build, local security regressions, rendered 500+ vehicle cases, heuristic credential scan and dependency audit pass. Repeated **120-user** API test: 11,475 requests/20.18s, 568.57/s, p95 17.32ms, zero unexpected errors; 20 admitted/100 expected 429/one worker. Local API results do not establish larger-map or Azure capacity.
+- Native preview showed the connected server and fresh-run review without submitting/authenticating. Azure and real secrets remain untouched; no other coding agents or raw-log edits. Test measurement at 2026-11-07T17:29:39.892+05:30 is 43.13 h from the original start; 16.87 h to target and 28.87 h to hard deadline. Original deadlines are unchanged.

@@ -12,6 +12,12 @@ import {
   type View,
 } from "./camera";
 import type { Selection } from "./editor";
+import {
+  roundaboutOutlines,
+  insidePolygon,
+  displayRoadWidth,
+  type RoundaboutOutline,
+} from "./roundabout-geometry";
 import { roadPoints, pathLength, samplePath } from "../model/road-geometry";
 
 export interface Frame {
@@ -39,7 +45,7 @@ interface Props {
   onMoveNode: (id: string, x: number, y: number) => void;
 }
 const rampColors = ["#440154", "#31688E", "#21918C", "#35B779", "#FDE725"];
-const roadWidth = (e: RoadEdge) => Math.max(20, e.width * 2.5, e.lanes * 12);
+
 const palette = {
   ground: "#D4D0DA",
   bridge: "#B2ACBE",
@@ -50,6 +56,7 @@ const palette = {
 export function NetworkCanvas(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null),
     propsRef = useRef(props);
+  const roundaboutVisuals = useRef(new Map<string, RoundaboutOutline>());
   const camera = useRef<Camera>({ x: 0, y: 0, zoom: 1 });
   const geometry = useRef({ scale: 1, cx: 0, cy: 0, centerX: 0, centerY: 0 });
   const drag = useRef<{
@@ -102,6 +109,7 @@ export function NetworkCanvas(props: Props) {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     let cachedScenario: Scenario | null = null,
       net: Network;
+    let outlines: RoundaboutOutline[] = [];
     let previousArray: Float32Array | undefined,
       previousIds = new Map<number, number>();
     const draw = (now: number) => {
@@ -110,7 +118,13 @@ export function NetworkCanvas(props: Props) {
       if (s !== cachedScenario) {
         cachedScenario = s;
         net = new Network(s);
+        outlines = roundaboutOutlines(s);
+        roundaboutVisuals.current = new Map(
+          outlines.flatMap((r) => r.edgeIds.map((id) => [id, r] as const)),
+        );
       }
+      const roadWidth = (e: RoadEdge) =>
+        displayRoadWidth(e, roundaboutVisuals.current.get(e.id));
       const nodeMap = new Map(s.nodes.map((n) => [n.id, n]));
       const getNode = (id: string): RoadNode => {
         const n = nodeMap.get(id)!;
@@ -231,6 +245,12 @@ export function NetworkCanvas(props: Props) {
               y = my + iy * cell - cell * 0.3,
               size = cell * 0.6;
             if (
+              outlines.some((r) =>
+                insidePolygon({ x: x + size / 2, y: y + size / 2 }, r.points),
+              )
+            )
+              continue;
+            if (
               s.edges.some((e) => {
                 const a = nodeMap.get(e.from)!,
                   b = nodeMap.get(e.to)!;
@@ -268,6 +288,13 @@ export function NetworkCanvas(props: Props) {
             poly(top, "#FCFAFD", "#E8E3EC");
           }
       }
+      for (const r of outlines)
+        if (p.layers.includes(r.layer))
+          poly(
+            r.points.map((n) => point(n.x, n.y, r.layer)),
+            "#E2E8CF",
+            "#7C8A58",
+          );
       const visible = (e: RoadEdge) =>
         p.layers.includes(nodeMap.get(e.from)!.layer) ||
         p.layers.includes(nodeMap.get(e.to)!.layer);
@@ -375,7 +402,14 @@ export function NetworkCanvas(props: Props) {
           selectedGroup?.edgeIds.includes(e.id)
         )
           strokePath(screen, "#6554A4", w + 7);
-        strokePath(screen, elevated ? palette.bridge : palette.ground, w);
+        const roundabout = roundaboutVisuals.current.get(e.id);
+        if (roundabout)
+          strokePath(screen, "#79668E", w + Math.max(1.5, 2 * scale));
+        strokePath(
+          screen,
+          roundabout ? "#B8ABC8" : elevated ? palette.bridge : palette.ground,
+          w,
+        );
         for (let lane = 1; lane < e.lanes; lane++)
           strokePath(
             offsetPath((lane / e.lanes - 0.5) * roadWidth(e)),
@@ -407,8 +441,8 @@ export function NetworkCanvas(props: Props) {
         ctx.save();
         ctx.translate(...ap);
         ctx.rotate(Math.atan2(arrowNext[1] - ap[1], arrowNext[0] - ap[0]));
-        ctx.strokeStyle = "#FBF9FD";
-        ctx.lineWidth = 1.3;
+        ctx.strokeStyle = roundabout ? "#514064" : "#FBF9FD";
+        ctx.lineWidth = roundabout ? 1.8 : 1.3;
         ctx.beginPath();
         ctx.moveTo(-4, -3);
         ctx.lineTo(0, 0);
@@ -433,8 +467,14 @@ export function NetworkCanvas(props: Props) {
             x = n.x + nx * offset,
             y = n.y + ny * offset,
             l = a.layer + (b.layer - a.layer) * t,
-            carLength = Math.min(6, (len / e.length) * 6),
-            carWidth = 3.5;
+            carLength = Math.min(
+              6,
+              (len / e.length) * 6,
+              roundabout ? roundabout.clearance * 0.5 : Infinity,
+            ),
+            carWidth = roundabout
+              ? Math.min(3.5, (roadWidth(e) / e.lanes) * 0.7)
+              : 3.5;
           poly(
             [
               [-carLength / 2, -carWidth / 2],
@@ -471,6 +511,16 @@ export function NetworkCanvas(props: Props) {
             [tx, ty] = point(n.x, n.y, a.layer + (b.layer - a.layer) * t),
             px = tx + 15,
             py = ty + (elevated ? -25 : 25);
+          if (
+            outlines.some((r) => {
+              const [rx, ry] = point(r.centre.x, r.centre.y, r.layer);
+              return (
+                Math.abs(px + 50 - rx) < r.clearance * scale + 75 &&
+                Math.abs(py - 5 - ry) < r.clearance * scale + 35
+              );
+            })
+          )
+            continue;
           ctx.font = "600 11px system-ui";
           ctx.fillStyle = "rgba(255,255,255,.94)";
           ctx.beginPath();
@@ -487,16 +537,12 @@ export function NetworkCanvas(props: Props) {
         }
       }
       if (p.labels)
-        for (const r of s.roundabouts ?? []) {
-          const ns = r.nodeIds.map((id) => nodeMap.get(id)!);
-          if (!p.layers.includes(ns[0].layer)) continue;
-          const [x, y] = point(
-            ns.reduce((v, n) => v + n.x, 0) / ns.length,
-            ns.reduce((v, n) => v + n.y, 0) / ns.length,
-            ns[0].layer,
-          );
+        for (const r of outlines) {
+          if (!p.layers.includes(r.layer) || r.clearance * scale * 2 < 90)
+            continue;
+          const [x, y] = point(r.centre.x, r.centre.y, r.layer);
           ctx.font = "600 10px system-ui";
-          ctx.fillStyle = "#5F546D";
+          ctx.fillStyle = "#4F593A";
           ctx.textAlign = "center";
           ctx.fillText("ROUNDABOUT", x, y);
           ctx.textAlign = "start";
@@ -610,6 +656,17 @@ export function NetworkCanvas(props: Props) {
             }
           : { kind: "node", id: n.id };
     }
+    for (const r of new Set(roundaboutVisuals.current.values())) {
+      if (!p.layers.includes(r.layer)) continue;
+      const [wx, wy] = unproject(
+        (x - cx) / scale,
+        (y - cy) / scale,
+        r.layer,
+        p.view,
+      );
+      if (insidePolygon({ x: wx, y: wy }, r.points))
+        return { kind: "roundabout", id: r.id };
+    }
     for (const e of p.scenario.edges.slice().reverse()) {
       const a = p.scenario.nodes.find((n) => n.id === e.from)!,
         b = p.scenario.nodes.find((n) => n.id === e.to)!;
@@ -631,7 +688,13 @@ export function NetworkCanvas(props: Props) {
             cy + points[i - 1][1] * scale,
             cx + points[i][0] * scale,
             cy + points[i][1] * scale,
-          ) < Math.max(10, roadWidth(e) * scale * 0.45)
+          ) <
+          Math.max(
+            10,
+            displayRoadWidth(e, roundaboutVisuals.current.get(e.id)) *
+              scale *
+              0.45,
+          )
         ) {
           const roundabout = p.scenario.roundabouts?.find((r) =>
             r.edgeIds.includes(e.id),

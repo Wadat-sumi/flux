@@ -108,6 +108,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
 
 export function App() {
   const [showServer, setShowServer] = useState(false),
+    [serverFocus, setServerFocus] = useState<"library" | "run">("library"),
     [showMap, setShowMap] = useState(false),
     [provenance, setProvenance] = useState<Provenance[]>([]);
   const [scenario, setScenario] = useState<Scenario>(flyover),
@@ -345,7 +346,10 @@ export function App() {
           </button>
           <button
             className="secondary cloud-button"
-            onClick={() => setShowServer(true)}
+            onClick={() => {
+              setServerFocus("library");
+              setShowServer(true);
+            }}
           >
             Data & cloud
           </button>
@@ -656,6 +660,15 @@ export function App() {
                         : metrics.time >= scenario.duration
                           ? "Run again"
                           : "Run simulation"}
+                    </button>
+                    <button
+                      className="secondary full"
+                      onClick={() => {
+                        setServerFocus("run");
+                        setShowServer(true);
+                      }}
+                    >
+                      Run on server
                     </button>
                     <div className="playback-secondary">
                       <button
@@ -1178,6 +1191,12 @@ export function App() {
               load(result.scenario, "custom", [result.provenance]);
               changeMode("simulate");
             }}
+            onServer={(result) => {
+              load(result.scenario, "custom", [result.provenance]);
+              changeMode("simulate");
+              setServerFocus("run");
+              setShowServer(true);
+            }}
             onClose={() => setShowMap(false)}
           />
         </Suspense>
@@ -1187,6 +1206,7 @@ export function App() {
           scenario={scenario}
           baseline={baseline}
           provenance={provenance}
+          focus={serverFocus}
           onLoad={(s, p) => load(s, "custom", p)}
           onClose={() => setShowServer(false)}
         />
