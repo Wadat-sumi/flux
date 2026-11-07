@@ -4,7 +4,11 @@ import {
   fleetSchema,
   SNAPSHOT_STRIDE,
   vehicleTypeIds,
+  bodyShapes,
+  profileMatchesReference,
 } from "../src/model/vehicles";
+import references from "../src/data/vehicle-references.json" with { type: "json" };
+import { vehicleGlyphs } from "../src/ui/vehicle-shapes";
 import {
   parseScenario,
   exportScenario,
@@ -79,6 +83,7 @@ test.each(defaultVehicleProfiles)(
       expect(states[i + 9]).toBeCloseTo(profile.length, 4);
       expect(states[i + 10]).toBeCloseTo(profile.width, 4);
       expect(states[i + 11]).toBe(vehicleTypeIds.indexOf(profile.id));
+      expect(states[i + 12]).toBe(bodyShapes.indexOf(profile.bodyShape!));
       expect(states[i + 4]).toBeLessThanOrEqual(profile.maxSpeed + 1e-5);
     }
     expect(idmAcceleration(0, 10, Infinity, 0, profile)).toBe(
@@ -123,7 +128,9 @@ test("zero-share types never spawn and legacy files retain the original car mode
   }));
   expect(
     generateDemand(s).every(
-      (v) => v.vehicleType === "truck" && v.length === 10,
+      (v) =>
+        v.vehicleType === "truck" &&
+        v.length === defaultVehicleProfiles[5].length,
     ),
   ).toBe(true);
   expect(importScenario(exportScenario(s))).toEqual(s);
@@ -308,6 +315,9 @@ test.each([
   { share: 101 },
   { share: 0 },
   { mass: 1000 },
+  { bodyShape: "<svg onload=alert(1)>" },
+  { referenceRevision: "unverified" },
+  { maxSpeed: 70.001 },
 ])("rejects invalid or unsupported profile fields %j", (patch) => {
   expect(() =>
     parseScenario({
@@ -329,4 +339,108 @@ test("mix bounds reject duplicates, excess types and totals other than 100", () 
   ])
     expect(() => fleetSchema.parse(mix)).toThrow();
   expect(fleetSchema.parse([{ ...p, share: 100 }])).toHaveLength(1);
+});
+test("published reference footprints and speed units survive schema/export without rounding", () => {
+  const expected = [
+    [3.86, 1.735, 165, 2.6],
+    [2.08, 0.767, 99, 2.825],
+    [2.635, 1.3, 65, 0.6],
+    [3.8, 1.5, 65, 1.3],
+    [12.05, 2.6, 70, 1.2],
+    [8.665, 2.44, 105, 1.3],
+  ];
+  defaultVehicleProfiles.forEach((profile, i) => {
+    const [length, width, kmh, a] = expected[i];
+    expect(profile.length).toBe(length);
+    expect(profile.width).toBe(width);
+    expect(profile.maxSpeed * 3.6).toBeCloseTo(kmh, 10);
+    expect(profile.acceleration).toBe(a);
+    expect(profileMatchesReference(profile)).toBe(true);
+    expect(profileMatchesReference({ ...profile, share: 25 })).toBe(true);
+    expect(
+      profileMatchesReference({ ...profile, length: profile.length + 0.01 }),
+    ).toBe(false);
+  });
+  const s = {
+    ...freeRoad(),
+    fleet: defaultVehicleProfiles.map((p) => ({ ...p })),
+  };
+  expect(importScenario(exportScenario(s)).fleet).toEqual(s.fleet);
+});
+test("every reference has auditable source metadata and acceleration classification", () => {
+  for (const source of Object.values(references.sources)) {
+    expect(new URL(source.url).protocol).toBe("https:");
+    expect(source.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(Number.isFinite(Date.parse(source.retrievedAt))).toBe(true);
+    expect(source.license.length).toBeGreaterThan(20);
+  }
+  for (const reference of Object.values(references.profiles)) {
+    for (const id of [
+      ...reference.geometrySources,
+      ...reference.speedSources,
+      ...reference.accelerationSources,
+    ])
+      expect(references.sources).toHaveProperty(id);
+    expect(reference.accelerationKind).toMatch(/model|proxy|assumption/);
+    expect(reference.accelerationNote.length).toBeGreaterThan(50);
+  }
+});
+test("old explicit profiles retain custom dimensions and missing metadata without automatic migration", () => {
+  const old = { ...defaultVehicleProfiles[0] };
+  delete old.bodyShape;
+  delete old.referenceRevision;
+  const legacy = {
+    ...old,
+    length: 4.8,
+    width: 1.8,
+    acceleration: 1.5,
+    share: 100,
+  };
+  const loaded = importScenario(
+    exportScenario({
+      ...freeRoad(),
+      demand: [{ origin: "source", destination: "sink", rate: 600 }],
+      fleet: [legacy],
+    }),
+  );
+  expect(loaded.fleet).toEqual([legacy]);
+  expect(profileMatchesReference(loaded.fleet![0])).toBe(false);
+  const sim = new Simulation(loaded);
+  sim.step(600);
+  expect(sim.snapshot()[12]).toBe(bodyShapes.indexOf("hatchback"));
+  expect(sim.snapshot()[9]).toBeCloseTo(4.8, 5);
+});
+test("all six original silhouettes differ and stay inside the physical footprint", () => {
+  expect(
+    new Set(
+      Object.values(vehicleGlyphs).map((g) =>
+        JSON.stringify(g.find((layer) => layer.role === "body")!.points),
+      ),
+    ).size,
+  ).toBe(6);
+  for (const glyph of Object.values(vehicleGlyphs))
+    for (const layer of glyph) {
+      expect(layer.points.length).toBeGreaterThanOrEqual(3);
+      for (const point of layer.points)
+        for (const coordinate of point) {
+          expect(Number.isFinite(coordinate)).toBe(true);
+          expect(Math.abs(coordinate)).toBeLessThanOrEqual(0.5);
+        }
+    }
+});
+test("body shape overrides affect the packed visual shape while physical dimensions remain unchanged", () => {
+  const p = { ...defaultVehicleProfiles[0], bodyShape: "pickup" as const };
+  const sim = new Simulation({
+    ...freeRoad(),
+    demand: [{ origin: "source", destination: "sink", rate: 600 }],
+    fleet: [p],
+  });
+  sim.step(600);
+  const states = sim.snapshot();
+  expect(states.length).toBeGreaterThan(0);
+  for (let i = 0; i < states.length; i += SNAPSHOT_STRIDE) {
+    expect(states[i + 12]).toBe(bodyShapes.indexOf("pickup"));
+    expect(states[i + 9]).toBeCloseTo(p.length, 5);
+    expect(states[i + 10]).toBeCloseTo(p.width, 5);
+  }
 });

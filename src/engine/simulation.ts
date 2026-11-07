@@ -9,6 +9,8 @@ import {
   SNAPSHOT_STRIDE,
   vehicleTypeIds,
   type VehicleTypeId,
+  bodyShapes,
+  defaultBodyShapes,
 } from "../model/vehicles";
 
 type Lanes = Map<string, Vehicle[]>;
@@ -434,6 +436,9 @@ export class Simulation {
           v.length,
           v.profile?.width ?? 1.8,
           vehicleTypeIds.indexOf((v.vehicleType ?? "car") as VehicleTypeId),
+          bodyShapes.indexOf(
+            v.profile?.bodyShape ?? defaultBodyShapes[v.vehicleType ?? "car"],
+          ),
         ],
         offset,
       );

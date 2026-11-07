@@ -9,6 +9,7 @@ import {
 } from "../src/model/schema";
 import type { ImportedData, Provenance } from "../src/model/backend";
 import { Network } from "../src/engine/network";
+import { defaultVehicleProfiles } from "../src/model/vehicles";
 import {
   clipMapRoads,
   projectPoint,
@@ -382,10 +383,14 @@ export function importOsm(
     nodes: [...nodes.values()],
     edges,
     demand: [],
+    fleet: defaultVehicleProfiles.map((p) => ({ ...p })),
     duration: 300,
     seed: 42,
     maxVehicles: 3000,
   };
+  warnings.add(
+    "Vehicle profiles use named references and uncalibrated model settings. The initial 100% car mix is synthetic, not a surveyed local fleet.",
+  );
   if (area) {
     // Real OSM geometry can contain sub-metre shape points. Collapse only connected,
     // same-layer points before clipping, rather than inventing connections at crossings.

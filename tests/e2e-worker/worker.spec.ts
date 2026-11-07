@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { freeRoad } from "../../src/scenarios/presets";
 import { mixedFleet } from "../vehicle-fixture";
-import { SNAPSHOT_STRIDE, vehicleTypeIds } from "../../src/model/vehicles";
+import {
+  SNAPSHOT_STRIDE,
+  vehicleTypeIds,
+  bodyShapes,
+  defaultBodyShapes,
+} from "../../src/model/vehicles";
 
 test("real browser module worker round-trips ping, rejects injection and loads typed snapshots", async ({
   page,
@@ -66,7 +71,7 @@ for (const mixed of [false, true])
     s.demand[0].rate = 7200;
     if (mixed) s.fleet = mixedFleet();
     const result = await page.evaluate(
-      async ({ scenario, typeIds, stride }) => {
+      async ({ scenario, typeIds, stride, shapes, fallbacks }) => {
         const worker = new Worker("/simulation.worker.js", { type: "module" });
         interface Frame {
           type: string;
@@ -120,6 +125,8 @@ for (const mixed of [false, true])
                 profile &&
                 Math.abs(states[i + 9] - profile.length) < 0.00001 &&
                 Math.abs(states[i + 10] - profile.width) < 0.00001 &&
+                states[i + 12] ===
+                  shapes.indexOf(profile.bodyShape ?? fallbacks[profile.id]) &&
                 states[i + 4] <= profile.maxSpeed + 0.00001
               );
             }),
@@ -129,7 +136,13 @@ for (const mixed of [false, true])
           worker.terminate();
         }
       },
-      { scenario: s, typeIds: vehicleTypeIds, stride: SNAPSHOT_STRIDE },
+      {
+        scenario: s,
+        typeIds: vehicleTypeIds,
+        stride: SNAPSHOT_STRIDE,
+        shapes: bodyShapes,
+        fallbacks: defaultBodyShapes,
+      },
     );
     expect(result.moving).toBeGreaterThanOrEqual(500);
     expect(result.time).toBe(300);

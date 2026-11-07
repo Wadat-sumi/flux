@@ -137,3 +137,13 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Clock 2026-11-07T21:06:57.630951+05:30, elapsed 46.75 h from original start; 13.25 h to target and 25.25 h to hard deadline. Original deadlines are unchanged.
 
 - Final review added a fractional lane-width/body-storage fit tolerance and regression, then repeated the full 367-case gate and 120-user workload. Final backend SHA-256: `be93c5eedb44f2099716b755b4b0aa542e8feccc377a025da92b972962a2ae08`. Clock 2026-11-07T21:14:23.780105+05:30, elapsed 46.87 h; 13.13 h to target, 25.13 h to hard deadline.
+
+
+## Verified vehicle references and JC Road usage
+
+- Replaced illustrative dimensions/speed caps with named OEM reference vehicles and preserved units, model/market, source URLs/dates/license status/SHA-256. Desired acceleration is explicitly a model parameter, derived proxy or research-informed assumption. Braking, gaps and headways remain uncalibrated. Added six distinct schematic footprints, precise numeric editing and in-app source notes; new presets/OSM imports use the references, while old/custom files retain their parameters until explicit reset.
+- Vehicle shapes/provenance persist through JSON, device/server saves and jobs; 13-field snapshots share the visual shape with the renderer. Source byte hashes and relevant rendered PDF specification pages were verified. No proprietary raw documents were checked in.
+- Added jc-road-workflow.md: OSM preview → review reference profiles/synthetic demand → permitted common-period OD CSV → local server run/report. Aggregate junction/PCU peaks and unmatched historical journey speeds were not treated as ready demand or calibrated observations; reuse authority and matched observations/control support remain pending.
+- Full gate **376 distinct cases** (331 headless/42 app-browser/3 worker), type/lint/build/security scan/audit passed. Mixed 566–572-agent rendering: 60 FPS/~30.18 ticks/s. Repeated 120-user API test: 11,431 requests/20.15 s, 567.40/s, p95 20.87 ms, zero unexpected errors; 20 admitted/100 expected 429/one worker. Evidence/limitations are recorded in testing.md.
+- Native reference settings verified; local frontend/API restarted and healthy. No Azure actions, real secrets, other coding agents or raw-log edits.
+- Clock 2026-11-07T21:48:12.806652+05:30, elapsed 47.44 h from the original start; 12.56 h to the internal target and 24.56 h to the hard deadline. Original deadlines unchanged.

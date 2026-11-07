@@ -7,10 +7,10 @@ import {
   type Scenario,
 } from "../model/schema";
 import {
-  flyover,
-  intersection,
-  bottleneck,
-  rampScenario,
+  flyover as legacyFlyover,
+  intersection as legacyIntersection,
+  bottleneck as legacyBottleneck,
+  rampScenario as legacyRampScenario,
 } from "../scenarios/presets";
 import type { WorkerRequest, WorkerResponse } from "../worker/protocol";
 import type { ExperimentResult } from "../engine/experiment";
@@ -36,6 +36,7 @@ import {
   vehicleLabels,
   vehicleTypeIds,
   fleetSummary,
+  defaultVehicleProfiles,
 } from "../model/vehicles";
 import type { Provenance } from "../model/backend";
 const MapPanel = lazy(() =>
@@ -43,6 +44,15 @@ const MapPanel = lazy(() =>
 );
 
 type Mode = "simulate" | "network" | "experiments";
+// New presets use current references; loading old JSON/saves preserves their parameters.
+const withReferenceFleet = (scenario: Scenario): Scenario => ({
+  ...scenario,
+  fleet: defaultVehicleProfiles.map((p) => ({ ...p })),
+});
+const flyover = () => withReferenceFleet(legacyFlyover());
+const intersection = () => withReferenceFleet(legacyIntersection());
+const bottleneck = (lanes = 1) => withReferenceFleet(legacyBottleneck(lanes));
+const rampScenario = () => withReferenceFleet(legacyRampScenario());
 const presetOptions = [
   { id: "flyover", name: "Flyover crossing", create: flyover },
   { id: "intersection", name: "Urban intersection", create: intersection },

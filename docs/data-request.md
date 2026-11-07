@@ -28,3 +28,6 @@ These requirements align with [Caltrans' microsimulation data guidance](https://
 
 
 Current source candidates and adoption gaps are in [the Bengaluru shortlist](bengaluru-data-shortlist.md). BTP-labelled timing PDFs have now been inspected, but their metadata upload date is not proof of present controller settings. Do not mix them with historical counts and describe the result as current calibration.
+
+
+The [JC Road workflow](jc-road-workflow.md) explains how to prepare/import suitable observations and run the selected network on the server, plus what can be previewed before that pack is available.

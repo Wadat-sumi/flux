@@ -48,3 +48,6 @@ These are aggregate summaries, not yet a movement-by-movement boundary OD file o
 SHA-256: `056ae0c14bc1785cbb601fa91fe39ce2c6d8af52b3032c6d3e4ede5276367390`.
 
 Next acquisition target: request/locate the JC Road raw turning-count sheets and valid signal plans for an overlapping nearby junction cluster, establish reuse authority and common survey periods, and obtain independent travel-time/queue observations. The existing engine needs asymmetric signal phases and time-varying/mixed-vehicle extensions where the selected records require them. Real map geometry is available now; default simulation demand remains explicitly synthetic.
+
+
+For the current app steps, demand CSV mapping and the distinction between synthetic preview and usable report observations, see [Using JC Road in Flux](jc-road-workflow.md).

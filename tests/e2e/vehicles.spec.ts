@@ -12,6 +12,101 @@ async function exportCurrent(page: Page) {
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
+test("reference dimensions retain millimetres, source notes distinguish dynamics, and old custom profiles require explicit reset", async ({
+  page,
+}) => {
+  await page.getByText("Vehicle types & attributes", { exact: true }).click();
+  await expect(page.getByLabel("Car length (m)", { exact: true })).toHaveValue(
+    "3.86",
+  );
+  await expect(page.getByLabel("Car width (m)", { exact: true })).toHaveValue(
+    "1.735",
+  );
+  await expect(
+    page.getByLabel("Car maximum speed (km/h)", { exact: true }),
+  ).toHaveValue("165");
+  await expect(
+    page.getByLabel("Body shape", { exact: true }).locator("option"),
+  ).toHaveCount(6);
+  await expect(
+    page.getByRole("region", { name: "Vehicle reference data" }),
+  ).toContainText("Matches reference defaults");
+  await page.getByText("Sources & parameter notes", { exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Vehicle reference data" }),
+  ).toContainText("not a Swift performance measurement");
+  await expect(
+    page.getByRole("link", { name: "Suzuki Swift UK 1.2 MHEV brochure" }),
+  ).toHaveAttribute("href", /^https:\/\/cdn.suzuki.co.uk\//);
+  await page
+    .getByLabel("Edit vehicle attributes", { exact: true })
+    .selectOption("twoWheeler");
+  await expect(
+    page.getByLabel("Two-wheeler width (m)", { exact: true }),
+  ).toHaveValue("0.767");
+  await expect(
+    page.getByLabel("Two-wheeler desired acceleration (m/s²)", { exact: true }),
+  ).toHaveValue("2.825");
+  await expect(
+    page.getByRole("img", { name: "Two-wheeler footprint preview" }),
+  ).toBeVisible();
+  const old = intersection();
+  old.fleet = [
+    {
+      id: "car",
+      share: 100,
+      length: 4.8,
+      width: 1.8,
+      maxSpeed: 120 / 3.6,
+      acceleration: 1.5,
+      deceleration: 2,
+      emergencyDeceleration: 8,
+      minGap: 2,
+      headway: 1.2,
+    },
+  ];
+  await page.getByLabel("Import scenario file", { exact: true }).setInputFiles({
+    name: "old-custom.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(old)),
+  });
+  expect((await exportCurrent(page)).fleet).toEqual(old.fleet);
+  await page.getByText("Vehicle types & attributes", { exact: true }).click();
+  await expect(page.getByLabel("Car length (m)", { exact: true })).toHaveValue(
+    "4.8",
+  );
+  await expect(
+    page.getByRole("region", { name: "Vehicle reference data" }),
+  ).toContainText("Custom or earlier values");
+  await page
+    .getByRole("button", { name: "Reset selected type defaults", exact: true })
+    .click();
+  await expect(page.getByLabel("Car width (m)", { exact: true })).toHaveValue(
+    "1.735",
+  );
+  await page
+    .getByRole("button", { name: "Apply vehicle settings", exact: true })
+    .click();
+  const reset = (await exportCurrent(page)).fleet.find(
+    (p: { id: string }) => p.id === "car",
+  );
+  expect(reset).toMatchObject({
+    length: 3.86,
+    width: 1.735,
+    bodyShape: "hatchback",
+    referenceRevision: "2026-11-07-ref1",
+  });
+  await page.getByText("Vehicle types & attributes", { exact: true }).click();
+  await page
+    .getByLabel("Edit vehicle attributes", { exact: true })
+    .selectOption("bus");
+  await page
+    .getByRole("img", { name: "Bus footprint preview" })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "docs/screenshots/vehicle-reference-settings.png",
+  });
+});
 test("single-type selection edits real vehicle attributes and survives export, saves and reload", async ({
   page,
 }) => {
@@ -22,7 +117,15 @@ test("single-type selection edits real vehicle attributes and survives export, s
   await page.getByLabel("Vehicle selection").selectOption("bus");
   await page.getByLabel("Bus length (m)", { exact: true }).fill("14");
   await page.getByLabel("Bus maximum speed (km/h)", { exact: true }).fill("36");
-  await page.getByLabel("Bus acceleration (m/s²)", { exact: true }).fill("0.6");
+  await page
+    .getByLabel("Bus desired acceleration (m/s²)", { exact: true })
+    .fill("0.6");
+  await page
+    .getByLabel("Body shape", { exact: true })
+    .selectOption("rigidTruck");
+  await expect(
+    page.getByRole("region", { name: "Vehicle reference data" }),
+  ).toContainText("Custom or earlier values");
   const headway = page.getByLabel("Bus following headway (s)", { exact: true });
   await headway.fill("");
   await headway.pressSequentially("2.2");
@@ -41,6 +144,8 @@ test("single-type selection edits real vehicle attributes and survives export, s
     maxSpeed: 10,
     acceleration: 0.6,
     headway: 2.2,
+    bodyShape: "rigidTruck",
+    referenceRevision: "2026-11-07-ref1",
   });
   await page.getByText("Demand & simulation settings", { exact: true }).click();
   await page
@@ -96,11 +201,11 @@ test("invalid mixes and braking are rejected, reset is usable, and phone forms f
     .getByRole("button", { name: "Apply vehicle settings", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText("Emergency braking");
+  await expect(page.getByRole("group", { name: "Vehicle colours" })).toHaveText(
+    "Car",
+  );
   await expect(
-    page.getByRole("group", { name: "Vehicle colours" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByText("Applied: Cars (default)", { exact: true }),
+    page.getByText("Applied: Car 100%", { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Reset selected type defaults", exact: true })

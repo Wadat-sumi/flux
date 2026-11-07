@@ -1,0 +1,174 @@
+{
+  "revision": "2026-11-07-ref1",
+  "units": {
+    "length": "m",
+    "width": "m",
+    "maxSpeedKmh": "km/h",
+    "acceleration": "m/s²"
+  },
+  "scope": "Representative model references; not class averages, legal limits or calibrated Indian fleet observations. Footprint shapes are original schematic illustrations, not manufacturer CAD.",
+  "sources": {
+    "swift": {
+      "title": "Suzuki Swift UK 1.2 MHEV brochure",
+      "url": "https://cdn.suzuki.co.uk/suzuki-gb/svzlmg5n/suzuki-swift-ebrochure-uk.pdf",
+      "retrievedAt": "2026-11-07T15:57:29.225972+00:00",
+      "sha256": "062f233362b4c0a768263cd5dff37d3fb1b75750f6e37363f8ba6a88b22d9c85",
+      "license": "Manufacturer factual specifications; no open reuse licence verified; no media redistributed"
+    },
+    "raider_dimensions": {
+      "title": "TVS Raider FI Chile specifications",
+      "url": "https://www.tvsmotor.com/en/cl/our-products/tvs-raider-fi",
+      "retrievedAt": "2026-11-07T15:57:26.532986+00:00",
+      "sha256": "cf08b19aa0e0d9db3e5e8366526f91b94d7df5a1767223d67bb5c2e734e664a2",
+      "license": "Manufacturer factual specifications; no open reuse licence verified; no media redistributed"
+    },
+    "raider_performance": {
+      "title": "TVS Raider SmartXonnect press release",
+      "url": "https://www.tvsmotor.com/media/press-release/tvs-motor-raises-the-bar-with-new-tvs-raider-wicked-update-tvs-raider-smartxonnecttm-with-tft-cluster",
+      "retrievedAt": "2026-11-07T15:57:25.933607+00:00",
+      "sha256": "29640a8b438413d21e5b5098bf81b2007f501087271b7cb52c57100ccbae3012",
+      "license": "Manufacturer factual specifications; no open reuse licence verified; no media redistributed"
+    },
+    "re": {
+      "title": "Bajaj RE250 global specifications",
+      "url": "https://cdn.globalbajaj.com/en/Brands/RE/RE250",
+      "retrievedAt": "2026-11-07T15:57:27.746419+00:00",
+      "sha256": "5ddb0a2b7a53c7997961ad84a481f0fd6118d34e53bed7764319cef6cb0a6e9d",
+      "license": "Manufacturer factual specifications; no open reuse licence verified; no media redistributed"
+    },
+    "ace": {
+      "title": "Tata Ace Gold Diesel brochure",
+      "url": "https://smalltrucks.tatamotors.com/assets/smalltrucks/files/2025-01/ACE%20GOLD%20DIESEL.pdf",
+      "retrievedAt": "2026-11-07T16:00:25.643923+00:00",
+      "sha256": "164316dad5b8059db8a6335dc86f44ce3622e63613f67947dc1824ac14aa6ff6",
+      "license": "Manufacturer factual specifications; no open reuse licence verified; no media redistributed"
+    },
+    "starbus": {
+      "title": "Tata Starbus 4/12 EV brochure",
+      "url": "https://busesandvans.tatamotors.com/assets/buses/files/2024-11/616-24-Tata%20Motors-EV-Bus-Starbus-4-12.pdf",
+      "retrievedAt": "2026-11-07T15:57:27.543574+00:00",
+      "sha256": "9ca3bddff6127e6f35106a5dd45faf318ff6fb861ebb8288fe8d3650c7491d0b",
+      "license": "Manufacturer factual specifications; no open reuse licence verified; no media redistributed"
+    },
+    "lpt": {
+      "title": "Tata LPT1618 LHD export brochure",
+      "url": "https://countrysites-tatamotors-com.s3-ap-southeast-1.amazonaws.com/countrysite/wp-content/uploads/sites/13/2016/06/03072525/LPT-1618_LHD.pdf",
+      "retrievedAt": "2026-11-07T16:00:24.994612+00:00",
+      "sha256": "56efff6dc74e335958ae02a63ded38728b7187f1cd4f1c7e746d5857b9b9a253",
+      "license": "Manufacturer factual specifications; no open reuse licence verified; no media redistributed"
+    },
+    "sumo": {
+      "title": "SUMO vehicle-type parameter defaults",
+      "url": "https://sumo.dlr.de/docs/Vehicle_Type_Parameter_Defaults.html",
+      "retrievedAt": "2026-11-07T15:57:29.078433+00:00",
+      "sha256": "789ba2cd97742c85237adb396de5e46cfd330b5b1aa1bfffb166bbaf89339ba7",
+      "license": "Source terms apply; factual parameter references only; raw document retained locally"
+    },
+    "idm": {
+      "title": "Martin Treiber IDM documentation",
+      "url": "https://mtreiber.de/MicroApplet/IDM.html",
+      "retrievedAt": "2026-11-07T16:00:25.744183+00:00",
+      "sha256": "6c82377996c5b1ed20296e26f3c413c0e83e2349bb1818c2e5f215c3d1d23474",
+      "license": "Source terms apply; factual parameter references only; raw document retained locally"
+    },
+    "acceleration_study": {
+      "title": "Ramireddy et al. 2021 acceleration and deceleration study",
+      "url": "https://pp.bme.hu/tr/article/download/16796/9272",
+      "retrievedAt": "2026-11-07T15:57:36.787392+00:00",
+      "sha256": "f42671dc5c239d6d18d02d024fe0be02e0076950c56c90335863025b69a67b23",
+      "license": "Source terms apply; factual parameter references only; raw document retained locally"
+    }
+  },
+  "profiles": {
+    "car": {
+      "name": "Suzuki Swift 1.2 MHEV, manual 2WD",
+      "market": "UK brochure reference; not a Bengaluru fleet average",
+      "length": 3.86,
+      "width": 1.735,
+      "maxSpeedKmh": 165,
+      "acceleration": 2.6,
+      "bodyShape": "hatchback",
+      "geometrySources": ["swift"],
+      "speedSources": ["swift"],
+      "accelerationSources": ["sumo"],
+      "accelerationKind": "model reference",
+      "accelerationNote": "SUMO generic passenger-car desired acceleration; not a Swift performance measurement.",
+      "sourceLocation": "Suzuki brochure PDF page 18, manual 2WD column."
+    },
+    "twoWheeler": {
+      "name": "TVS Raider model-family reference",
+      "market": "Chile dimensional specification and India performance release; model-family proxy, not one certified variant",
+      "length": 2.08,
+      "width": 0.767,
+      "maxSpeedKmh": 99,
+      "acceleration": 2.825,
+      "bodyShape": "motorcycle",
+      "geometrySources": ["raider_dimensions"],
+      "speedSources": ["raider_performance"],
+      "accelerationSources": ["raider_performance"],
+      "accelerationKind": "derived proxy",
+      "accelerationNote": "Derived mean Δv/Δt = (60/3.6)/5.9 = 2.825 m/s² from the published factory 0–60 test. Used as an initial IDM parameter, not peak acceleration or a fitted speed-dependent curve.",
+      "sourceLocation": "TVS technical dimensions; TVS SmartXonnect press release, 0–60 km/h in 5.9 s and top speed 99 km/h."
+    },
+    "autoRickshaw": {
+      "name": "Bajaj RE250",
+      "market": "Global export reference",
+      "length": 2.635,
+      "width": 1.3,
+      "maxSpeedKmh": 65,
+      "acceleration": 0.6,
+      "bodyShape": "rickshaw",
+      "geometrySources": ["re"],
+      "speedSources": ["re"],
+      "accelerationSources": ["acceleration_study"],
+      "accelerationKind": "research-informed assumption",
+      "accelerationNote": "0.6 m/s² is an engineering starting value informed by the paper’s three-wheeler approach means (0.350–0.552 m/s²). The observed mean 0.427 is not itself the IDM free-road acceleration parameter; no fitted RE250 dynamics are claimed.",
+      "sourceLocation": "Bajaj RE250 technical specifications; Ramireddy et al. 2021 Table 1, PDF page 5."
+    },
+    "lightCommercial": {
+      "name": "Tata Ace Gold Diesel BS6 Phase 2",
+      "market": "Indian manufacturer brochure reference",
+      "length": 3.8,
+      "width": 1.5,
+      "maxSpeedKmh": 65,
+      "acceleration": 1.3,
+      "bodyShape": "pickup",
+      "geometrySources": ["ace"],
+      "speedSources": ["ace"],
+      "accelerationSources": ["sumo"],
+      "accelerationKind": "model proxy",
+      "accelerationNote": "SUMO generic truck acceleration used as an initial proxy. The Ace brochure does not publish a numeric acceleration curve; this is not manufacturer-measured Ace acceleration.",
+      "sourceLocation": "Tata brochure PDF page 2."
+    },
+    "bus": {
+      "name": "Tata Starbus 4/12 EV",
+      "market": "Indian city-bus manufacturer reference",
+      "length": 12.05,
+      "width": 2.6,
+      "maxSpeedKmh": 70,
+      "acceleration": 1.2,
+      "bodyShape": "cityBus",
+      "geometrySources": ["starbus"],
+      "speedSources": ["starbus"],
+      "accelerationSources": ["sumo"],
+      "accelerationKind": "model reference",
+      "accelerationNote": "SUMO city-bus desired acceleration. Manufacturer lists acceleration only as “As per CMVR”, without a numeric rate; 1.2 is not a measured Starbus rate.",
+      "sourceLocation": "Tata brochure PDF page 2: nominal length 12050 + 50 mm; body width excludes mirrors."
+    },
+    "truck": {
+      "name": "Tata LPT1618, 4800 mm wheelbase",
+      "market": "Historical Euro-II export/LHD reference; not a current Indian legal or governed-speed specification",
+      "length": 8.665,
+      "width": 2.44,
+      "maxSpeedKmh": 105,
+      "acceleration": 1.3,
+      "bodyShape": "rigidTruck",
+      "geometrySources": ["lpt"],
+      "speedSources": ["lpt"],
+      "accelerationSources": ["sumo"],
+      "accelerationKind": "model reference",
+      "accelerationNote": "SUMO generic rigid-truck desired acceleration; not an acceleration measurement for this LPT variant.",
+      "sourceLocation": "Tata export brochure dimensions/performance; overall length is 8665 mm for the 4800 mm wheelbase, not cargo-deck length."
+    }
+  }
+}

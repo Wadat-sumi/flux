@@ -1458,6 +1458,12 @@
 .vehicle-mix label { display: grid; grid-template-columns: minmax(0, 1fr) 68px; align-items: center; gap: 6px; }
 .vehicle-mix input { min-width: 0; }
 .vehicle-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 9px; }
+.vehicle-reference { margin: 8px 0 14px; padding: 10px; border: 1px solid #e5dfed; border-radius: 8px; overflow-wrap: anywhere; }
+.vehicle-reference strong { font-size: 12px; }
+.vehicle-reference details summary { font-size: 11px; cursor: pointer; }
+.vehicle-reference ul { padding-left: 16px; font-size: 11px; line-height: 1.6; }
+.vehicle-reference a { color: #65538c; }
+.vehicle-footprint { width: 100%; height: 58px; background: #f5f2f8; border-radius: 7px; margin-bottom: 10px; }
 .vehicle-fields label { min-width: 0; overflow-wrap: anywhere; }
 .vehicle-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; flex-shrink: 0; }
 .vehicle-key { display: flex; flex-wrap: wrap; gap: 6px 9px; max-width: 180px; margin-top: 6px; font-size: 10px; }

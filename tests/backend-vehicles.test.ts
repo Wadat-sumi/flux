@@ -79,6 +79,8 @@ test("server endpoints reject hostile, excessive and inconsistent fleet profiles
     [{ ...scenario.fleet[0], share: 99 }],
     Array.from({ length: 100 }, () => scenario.fleet![0]),
     [{ ...scenario.fleet[0], constructor: "malicious" }],
+    [{ ...scenario.fleet[0], share: 100, bodyShape: "<svg onload=alert(1)>" }],
+    [{ ...scenario.fleet[0], share: 100, referenceRevision: "unverified" }],
   ]) {
     for (const path of ["/api/scenarios", "/api/jobs"])
       expect(

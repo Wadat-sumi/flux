@@ -1,17 +1,17 @@
 {
-  "recordedAt": "2026-11-07T15:42:27.357Z",
+  "recordedAt": "2026-11-07T16:16:14.880Z",
   "browser": "Playwright Chromium",
   "topology": "mixed",
   "viewport": {
     "width": 1280,
     "height": 900
   },
-  "agentsAtStart": 529,
-  "elapsedMs": 4011.100000023842,
-  "rafFps": 60.08326892836566,
+  "agentsAtStart": 566,
+  "elapsedMs": 4009.5,
+  "rafFps": 60.10724529243048,
   "canvasFps": 60,
   "p95FrameMs": 16.700000000000728,
-  "simulationTicksPerSecond": 30.166288549096226,
-  "agentsAtEnd": 535,
+  "simulationTicksPerSecond": 30.178326474622544,
+  "agentsAtEnd": 572,
   "note": "Real built app, main-thread canvas, module worker, live metrics; local production QA host, not deployed Azure."
 }

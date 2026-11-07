@@ -1,3 +1,4 @@
+import { vehicleGlyphs } from "./vehicle-shapes";
 import { useEffect, useRef, useState } from "react";
 import type { Scenario, RoadEdge, RoadNode } from "../model/schema";
 import type { Metrics } from "../engine/statistics";
@@ -19,7 +20,7 @@ import {
   type RoundaboutOutline,
 } from "./roundabout-geometry";
 import { roadPoints, pathLength, samplePath } from "../model/road-geometry";
-import { SNAPSHOT_STRIDE, vehicleColors } from "../model/vehicles";
+import { SNAPSHOT_STRIDE, vehicleColors, bodyShapes } from "../model/vehicles";
 
 export interface Frame {
   states: Float32Array;
@@ -483,28 +484,26 @@ export function NetworkCanvas(props: Props) {
               (physicalWidth * roadWidth(e)) / e.width,
               (roadWidth(e) / e.lanes) * 0.85,
             );
-          poly(
-            [
-              [-carLength / 2, -carWidth / 2],
-              [carLength / 2, -carWidth / 2],
-              [carLength / 2, carWidth / 2],
-              [-carLength / 2, carWidth / 2],
-            ].map(([u, v]) =>
-              point(x + ux * u + nx * v, y + uy * u + ny * v, l),
-            ),
-            vehicleColors[typeIndex] ?? palette.car,
-          );
-          if (
-            carLength * scale >= 5 &&
-            states.length < SNAPSHOT_STRIDE * 1000
-          ) {
-            const [px, py] = point(x, y, l);
-            ctx.fillStyle = "#C1B7D1";
-            ctx.fillRect(
-              px - Math.min(1.6, carLength * 0.3) * scale,
-              py - Math.min(1.3, carWidth * 0.3) * scale,
-              Math.min(3.2, carLength * 0.6) * scale,
-              Math.min(2.6, carWidth * 0.6) * scale,
+          const shape = bodyShapes[states[i + 12]] ?? "hatchback";
+          const detail =
+            carLength * scale >= 7 && states.length < SNAPSHOT_STRIDE * 1000;
+          for (const glyph of vehicleGlyphs[shape]) {
+            if (glyph.role !== "body" && !detail) continue;
+            poly(
+              glyph.points.map(([u, v]) =>
+                point(
+                  x + ux * u * carLength + nx * v * carWidth,
+                  y + uy * u * carLength + ny * v * carWidth,
+                  l,
+                ),
+              ),
+              glyph.role === "body"
+                ? (vehicleColors[typeIndex] ?? palette.car)
+                : glyph.role === "tyre"
+                  ? "#51495C"
+                  : glyph.role === "window"
+                    ? "#EEE9F5"
+                    : "#B6ABC8",
             );
           }
         }

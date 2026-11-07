@@ -2,6 +2,10 @@ import { useState } from "react";
 import { parseScenario, type Scenario } from "../model/schema";
 import {
   defaultVehicleProfiles,
+  bodyShapes,
+  bodyShapeLabels,
+  defaultBodyShapes,
+  profileMatchesReference,
   fleetSummary,
   vehicleLabels,
   vehicleColors,
@@ -9,31 +13,36 @@ import {
   type VehicleProfile,
   type VehicleTypeId,
 } from "../model/vehicles";
+import references from "../data/vehicle-references.json" with { type: "json" };
+import { vehicleGlyphs } from "./vehicle-shapes";
 
 const fields: {
-  key: Exclude<keyof VehicleProfile, "id" | "share">;
+  key: Exclude<
+    keyof VehicleProfile,
+    "id" | "share" | "bodyShape" | "referenceRevision"
+  >;
   label: string;
   min: number;
   max: number;
   step: number;
   factor?: number;
 }[] = [
-  { key: "length", label: "length (m)", min: 1, max: 18, step: 0.1 },
-  { key: "width", label: "width (m)", min: 0.5, max: 3, step: 0.1 },
+  { key: "length", label: "length (m)", min: 1, max: 18, step: 0.001 },
+  { key: "width", label: "width (m)", min: 0.5, max: 3, step: 0.001 },
   {
     key: "maxSpeed",
     label: "maximum speed (km/h)",
     min: 7.2,
-    max: 162,
+    max: 252,
     step: 0.1,
     factor: 3.6,
   },
   {
     key: "acceleration",
-    label: "acceleration (m/s²)",
+    label: "desired acceleration (m/s²)",
     min: 0.2,
     max: 5,
-    step: 0.1,
+    step: 0.001,
   },
   {
     key: "deceleration",
@@ -78,11 +87,9 @@ export function VehiclePanel({
   const [draft, setDraft] = useState(() =>
     defaultVehicleProfiles.map((p) => {
       const saved = scenario.fleet?.find((f) => f.id === p.id);
-      return {
-        ...p,
-        ...saved,
-        share: scenario.fleet ? (saved?.share ?? 0) : p.share,
-      };
+      return saved
+        ? { ...saved, bodyShape: saved.bodyShape ?? defaultBodyShapes[p.id] }
+        : { ...p, share: scenario.fleet ? 0 : p.share };
     }),
   );
   const profile = draft.find((p) => p.id === editing)!,
@@ -190,6 +197,102 @@ export function VehiclePanel({
             ))}
           </select>
         </label>
+        <section
+          className="vehicle-reference"
+          aria-label="Vehicle reference data"
+        >
+          <strong>Reference: {references.profiles[editing].name}</strong>
+          <p className="hint">
+            {profileMatchesReference(profile)
+              ? "Matches reference defaults. Dynamics remain uncalibrated."
+              : "Custom or earlier values. Reset this type to use the reference defaults."}
+          </p>
+          <details>
+            <summary>Sources & parameter notes</summary>
+            <p className="hint">
+              {references.profiles[editing].market}.{" "}
+              {references.profiles[editing].sourceLocation}
+            </p>
+            <p className="hint">
+              Acceleration — {references.profiles[editing].accelerationKind}:{" "}
+              {references.profiles[editing].accelerationNote}
+            </p>
+            <p className="hint">
+              Braking, gap and headway are uncalibrated model settings. Maximum
+              speed is a technical capability, not a legal limit; the road speed
+              also caps motion. Shapes are schematic footprints, not
+              manufacturer CAD.
+            </p>
+            <ul>
+              {[
+                ...new Set([
+                  ...references.profiles[editing].geometrySources,
+                  ...references.profiles[editing].speedSources,
+                  ...references.profiles[editing].accelerationSources,
+                  "idm",
+                ]),
+              ].map((id) => {
+                const source =
+                  references.sources[id as keyof typeof references.sources];
+                return (
+                  <li key={id}>
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {source.title}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        </section>
+        <label>
+          Body shape
+          <select
+            aria-label="Body shape"
+            value={profile.bodyShape ?? defaultBodyShapes[editing]}
+            onChange={(e) =>
+              update({
+                bodyShape: e.target.value as VehicleProfile["bodyShape"],
+              })
+            }
+          >
+            {bodyShapes.map((shape) => (
+              <option key={shape} value={shape}>
+                {bodyShapeLabels[shape]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <svg
+          className="vehicle-footprint"
+          viewBox="-9 -1.6 18 3.2"
+          role="img"
+          aria-label={`${vehicleLabels[editing]} footprint preview`}
+        >
+          {vehicleGlyphs[profile.bodyShape ?? defaultBodyShapes[editing]].map(
+            (glyph, i) => (
+              <polygon
+                key={i}
+                points={glyph.points
+                  .map(([x, y]) => `${x * profile.length},${y * profile.width}`)
+                  .join(" ")}
+                fill={
+                  glyph.role === "body"
+                    ? vehicleColors[vehicleTypeIds.indexOf(editing)]
+                    : glyph.role === "tyre"
+                      ? "#51495C"
+                      : glyph.role === "window"
+                        ? "#EEE9F5"
+                        : "#B6ABC8"
+                }
+              />
+            ),
+          )}
+        </svg>
         <div className="vehicle-fields">
           {fields.map((f) => (
             <label key={`${editing}-${f.key}-${resetVersion}`}>
@@ -202,7 +305,7 @@ export function VehiclePanel({
                 step={f.step}
                 required
                 defaultValue={Number(
-                  (profile[f.key] * (f.factor ?? 1)).toFixed(1),
+                  (profile[f.key] * (f.factor ?? 1)).toFixed(3),
                 )}
                 onChange={(e) =>
                   update({ [f.key]: Number(e.target.value) / (f.factor ?? 1) })
@@ -225,12 +328,11 @@ export function VehiclePanel({
           Reset selected type defaults
         </button>
         <p className="hint">
-          Defaults are illustrative, not calibrated city observations. Length
-          affects storage; width controls lane fit. Speed is capped by the road
-          and vehicle limits. Following and braking settings affect motion.
-          Vehicles need a route with enough lane width and segment storage;
-          otherwise the trip is rejected. Two-wheelers still follow lanes;
-          filtering, overtaking within a lane and bus stops are not modelled.
+          Defaults use named vehicle references and model proxies, not measured
+          city averages. Length affects storage; width controls lane fit. Trips
+          without a route large enough for the vehicle are rejected.
+          Two-wheelers follow lanes; lane filtering and bus stops are not
+          modelled.
         </p>
         <button className="secondary full" disabled={invalidMix}>
           Apply vehicle settings

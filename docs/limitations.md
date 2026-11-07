@@ -3,7 +3,7 @@
 Flux is an educational experimentation tool, not a calibrated or validated forecast for infrastructure investment or safety analysis. Synthetic demand and simplified controls demonstrate mechanisms rather than real-city predictions.
 
 - Straight or bounded polyline road geometry; independently editable operational lengths can differ from drawn path length. Imported road compaction preserves geometric arc length.
-- Six configurable vehicle classes with illustrative dimensions and speed/acceleration/braking/following parameters. No lane-free filtering, bus stops/dwell, articulated truck turning or powertrain/gradient dynamics. Legacy files without profiles retain the original car model; see vehicle-types.md.
+- Six configurable vehicle classes use named OEM dimensional/speed references, explicitly classified desired-acceleration proxies and uncalibrated braking/following settings. They are not universal class averages or observed Indian fleet parameters. No lane-free filtering, bus stops/dwell, articulated truck turning or powertrain/gradient dynamics. Legacy files without profiles retain the original car model; see vehicle-types.md.
 - Static vehicle-aware free-flow shortest paths without adaptive rerouting or destination choice. Explicit profiles exclude lanes narrower than the body and segments without whole-body-plus-gap storage; a long body cannot span several short edges.
 - Simplified gap-based lane changes and unrestricted turns from every lane.
 - Two-axis symmetric signal timing and conservative exclusive-node intersection reservations, without turning polygons.
