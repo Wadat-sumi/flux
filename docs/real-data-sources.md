@@ -40,7 +40,7 @@ The optional backend adapter implements [TomTom Flow Segment Data](https://docs.
 
 ## Accuracy boundary
 
-[FHWA calibration guidance](https://ops.fhwa.dot.gov/publications/fhwahop16072/mod4.htm) motivates comparing modeled volumes/speeds/travel times against observations. The current Flux passenger-vehicle and simple signal assumptions cannot establish calibrated Indian mixed-traffic accuracy. Road/provider integrations make ingestion and comparisons possible; empirical fitting, richer vehicle classes/phasing and independent validation remain work that requires suitable observations. [SUMO calibration](https://eclipse.dev/sumo/docs/Simulation/Calibrator.html) is a possible future engine path; it has not replaced the custom engine.
+[FHWA calibration guidance](https://ops.fhwa.dot.gov/publications/fhwahop16072/mod4.htm) motivates comparing modeled volumes/speeds/travel times against observations. The current Flux configurable lane-based vehicle profiles and simple signal assumptions do not establish calibrated Indian mixed-traffic accuracy. Road/provider integrations make ingestion and comparisons possible; empirical fitting, lane-free/transit behaviour, richer signal phasing and independent validation remain work requiring suitable observations. [SUMO calibration](https://eclipse.dev/sumo/docs/Simulation/Calibrator.html) is a possible future engine path; it has not replaced the custom engine.
 
 
 ## Dataset-target follow-up — 7 November 2026

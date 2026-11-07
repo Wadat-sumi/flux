@@ -11,6 +11,7 @@ import { api, setCsrf } from "./api";
 import { Chart } from "./Chart";
 import { cities, type CityId } from "../model/cities";
 import type { TrafficObservation } from "../../server/tomtom";
+import { fleetSummary } from "../model/vehicles";
 
 type JobSummary = Omit<ServerJob, "input" | "results">;
 interface Dataset {
@@ -49,6 +50,7 @@ function NetworkSummary({ scenario }: { scenario: Scenario }) {
         {scenario.nodes.length} nodes · {scenario.edges.length} directed roads ·{" "}
         {scenario.roundabouts?.length ?? 0} roundabouts
       </p>
+      <p>Vehicles: {fleetSummary(scenario.fleet)}</p>
       <p>
         {scenario.duration} simulated seconds · seed {scenario.seed} ·{" "}
         {scenario.demand
@@ -700,6 +702,11 @@ export function ServerPanel({
               to 20 active jobs globally and three per account. Each job has a
               120-second execution limit. Results remain available after closing
               the browser.
+            </p>
+            <p className="hint">
+              Paired runs share the baseline demand, seed and vehicle profiles
+              on both networks. Baseline vehicles:{" "}
+              {fleetSummary(baseline.fleet)}.
             </p>
             <div className="server-actions">
               {[false, true].map((paired) => (

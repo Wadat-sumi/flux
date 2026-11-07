@@ -39,3 +39,6 @@ Owner follow-up, 7 November: add interactive OSM area selection, automatic direc
 - [x] Clarify roundabout geometry with a mapped island, width caps, contrast and less label overlap; preserve simulation physics.
 - [x] Add direct map/current-network server-run review with explicit submission and retained geometry/provenance.
 - [ ] Benchmark representative larger sparse/dense networks before designing a larger bounded server-import mode. The current 800 m selection cap is conservative and unchanged.
+
+- [x] Add six configurable vehicle types, single/mixed selection, physical/driving parameters, type-aware motion/routing/storage, saved profiles and per-type observations.
+- [ ] Fit class shares/parameters to observed classified counts and independent trajectories; implement time-varying/classified OD ingestion, lane-free behaviour, bus dwell and richer signal phases when required by the selected dataset. These are not completed by adding profile defaults.

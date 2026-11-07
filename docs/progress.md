@@ -33,12 +33,12 @@
 - [x] Three original static SVG proposals and reference study.
 - [x] Owner chose C — Layered City before UI code; recorded in design.md and ADR 003.
 - [x] Layered City UI, network editor, ramps/signals/demand forms, live canvas/metrics, save/load, and paired experiments.
-- [x] Local validation: 219 headless tests + 26 built-app browser tests + 2 isolated worker browser tests; repeated 120-user API load and rendered 500+ agent benchmarks recorded.
+- [x] Local validation: 323 headless tests + 41 built-app browser tests + 3 isolated worker browser tests; repeated 120-user API load and rendered default/mixed 500+ agent benchmarks recorded.
 - [ ] Final Azure deployment, docs, clean tree and remote SHA verification.
 
 ## Current work
 
-The full-stack backend and map/drawing milestone 1e678fc was pushed. Roundabout display and direct selected-network server review now pass the 329-case full gate and repeated 120-user workload; prepare the tested commit/push and retain the preview. The owner chose a Bengaluru corridor with 2–4 junctions for dataset research. Azure authentication/provisioning/deployment, live provider verification, empirical calibration and larger-area benchmarks remain pending; Azure work is deferred to joint review.
+Vehicle-type implementation now passes the 367-case gate and repeated 120-user API workload. The full local app has been restarted with the tested backend. The tested implementation is ready for review in the running preview. Bengaluru empirical dataset acquisition/calibration, larger-area benchmarks and joint Azure deployment/live verification remain pending.
 
 ## Blockers
 
@@ -46,7 +46,7 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 
 ## Verification
 
-131 headless/unit/integration/boundary/performance/adversarial tests, 21 built-app browser tests and 2 isolated worker browser tests pass. Type checking, lint, full build and credential-pattern scan pass. Real app: 544–552 moving agents, 60 canvas FPS, 30.18 simulation ticks/s, p95 frame 16.80 ms. Terraform fmt/validate pass; Azure plan/apply/deployment remain deferred. See testing.md and security.md for scope.
+367 distinct automated cases pass: 323 headless/unit/integration/security, 41 built-app browser and three isolated worker browser cases. Type/lint/build, credential scan and dependency audit pass. Mixed 529–535-agent rendering holds 60 FPS/~30.17 ticks/s. Final repeated 120-user workload: 11,499 requests/20.20s, p95 17.32ms, zero unexpected errors; 20 accepted jobs/100 expected 429/one worker. See testing.md for workload limits. Azure remains deferred.
 
 ## Session events
 
@@ -126,3 +126,14 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Explained the conservative 800 m cap and independent raw-data/graph/worker limits. The question did not authorize removing limits; they remain unchanged. Recorded larger sparse/dense server-mode benchmarking as pending.
 - Full gate: **329 distinct cases** (290 headless/37 app-browser/2 worker), type/lint/build, local security regressions, rendered 500+ vehicle cases, heuristic credential scan and dependency audit pass. Repeated **120-user** API test: 11,475 requests/20.18s, 568.57/s, p95 17.32ms, zero unexpected errors; 20 admitted/100 expected 429/one worker. Local API results do not establish larger-map or Azure capacity.
 - Native preview showed the connected server and fresh-run review without submitting/authenticating. Azure and real secrets remain untouched; no other coding agents or raw-log edits. Test measurement at 2026-11-07T17:29:39.892+05:30 is 43.13 h from the original start; 16.87 h to target and 28.87 h to hard deadline. Original deadlines are unchanged.
+
+
+## Vehicle types, attributes and mixed traffic
+
+- Added single-type or validated global mix selection for car, two-wheeler, auto-rickshaw, light commercial vehicle, bus and truck. Eight editable attributes cover length/width, maximum speed, acceleration, comfortable/emergency braking, minimum gap and headway. Defaults are illustrative assumptions.
+- Profiles affect IDM motion, hard road/type caps, whole-body storage, lane fit, type-aware routing, lane-change gaps, reservations and per-type accounting. Canvas receives actual dimensions/type indices with legible glyph caps/colours. Profiles persist in JSON/device/server saves/jobs; baseline profiles and assignments are shared across paired runs. Legacy unprofiled files retain their original car model.
+- Full required gate: **367 distinct cases** (323 headless/41 app-browser/3 worker), build/type/lint/security scans and audit pass. Mixed 529–535-agent rendering holds 60 FPS/~30.17 ticks/s. Repeated 120-user API workload with six profiles: 11,499 requests/20.20s, 569.23/s, p95 17.32ms, zero unexpected errors; 20 admitted/100 expected 429/one worker. Local tests do not establish real-city calibration or Azure capacity.
+- Full Chromium replaces the installed headless shell for longer isolated-worker checks after its ICU/GPU startup failure; graphics protections were not disabled. Native preview verified six-class accounting at 60 s, and the full local app was restarted on the tested backend. No real secrets, Azure actions, other coding agents or raw-log edits.
+- Clock 2026-11-07T21:06:57.630951+05:30, elapsed 46.75 h from original start; 13.25 h to target and 25.25 h to hard deadline. Original deadlines are unchanged.
+
+- Final review added a fractional lane-width/body-storage fit tolerance and regression, then repeated the full 367-case gate and 120-user workload. Final backend SHA-256: `be93c5eedb44f2099716b755b4b0aa542e8feccc377a025da92b972962a2ae08`. Clock 2026-11-07T21:14:23.780105+05:30, elapsed 46.87 h; 13.13 h to target, 25.13 h to hard deadline.

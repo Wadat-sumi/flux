@@ -1,5 +1,6 @@
 import type { Scenario, RoadEdge, RoadNode } from "../model/schema";
 import { nodePoints, samplePath } from "../model/road-geometry";
+import type { VehicleProfile } from "../model/vehicles";
 
 export class Network {
   readonly nodes: Map<string, RoadNode>;
@@ -19,8 +20,21 @@ export class Network {
     }
   }
   /** Dijkstra weights are seconds at the posted speed limit. Cycles are valid. */
-  route(origin: string, destination: string): string[] | null {
-    const key = JSON.stringify([origin, destination]);
+  route(
+    origin: string,
+    destination: string,
+    vehicle?: VehicleProfile,
+  ): string[] | null {
+    const key = JSON.stringify([
+      origin,
+      destination,
+      vehicle && [
+        vehicle.length,
+        vehicle.width,
+        vehicle.minGap,
+        vehicle.maxSpeed,
+      ],
+    ]);
     if (this.routeCache.has(key)) return this.routeCache.get(key)!;
     const dist = new Map([[origin, 0]]),
       previous = new Map<string, RoadEdge>();
@@ -36,7 +50,15 @@ export class Network {
       if (!current || current === destination) break;
       pending.delete(current);
       for (const e of this.outgoing.get(current) ?? []) {
-        const cost = best + e.length / e.speedLimit;
+        if (
+          vehicle &&
+          (e.width / e.lanes + 1e-9 < vehicle.width ||
+            e.length + 1e-9 < vehicle.length + vehicle.minGap)
+        )
+          continue;
+        const cost =
+          best +
+          e.length / Math.min(e.speedLimit, vehicle?.maxSpeed ?? Infinity);
         if (cost < (dist.get(e.to) ?? Infinity)) {
           dist.set(e.to, cost);
           previous.set(e.to, e);

@@ -32,6 +32,11 @@ export function experimentForExport(result: ExperimentResult) {
         result.metrics.meanWaitingTime,
       ),
       meanDelay: completedAverage(result.metrics, result.metrics.meanDelay),
+      vehicleTypes: result.metrics.vehicleTypes?.map((t) => ({
+        ...t,
+        meanSpeed: t.moving ? t.meanSpeed : null,
+        meanTravelTime: t.completed ? t.meanTravelTime : null,
+      })),
     },
     history: result.history.map((sample) => ({
       ...sample,

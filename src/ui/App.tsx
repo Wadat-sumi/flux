@@ -29,6 +29,14 @@ import {
 import type { View } from "./camera";
 import { completedAverage, experimentForExport } from "./observations";
 import { ServerPanel } from "./ServerPanel";
+import { VehiclePanel } from "./VehiclePanel";
+import { VehicleBreakdown } from "./VehicleBreakdown";
+import {
+  vehicleColors,
+  vehicleLabels,
+  vehicleTypeIds,
+  fleetSummary,
+} from "../model/vehicles";
 import type { Provenance } from "../model/backend";
 const MapPanel = lazy(() =>
   import("./MapPanel").then((m) => ({ default: m.MapPanel })),
@@ -626,6 +634,12 @@ export function App() {
                         Advance 20 seconds
                       </button>
                     </details>
+                    <VehiclePanel
+                      key={JSON.stringify(scenario)}
+                      scenario={scenario}
+                      onApply={apply}
+                      onError={fail}
+                    />
                     <div className="layers-row">
                       <div className="eyebrow">VISIBLE LAYERS</div>
                       <div className="layer-options">
@@ -779,6 +793,28 @@ export function App() {
               >
                 {labels ? "Hide labels" : "Show labels"}
               </button>
+              {scenario.fleet && (
+                <div
+                  className="vehicle-key"
+                  role="group"
+                  aria-label="Vehicle colours"
+                >
+                  {scenario.fleet
+                    .filter((p) => p.share > 0)
+                    .map((p) => (
+                      <span key={p.id}>
+                        <i
+                          className="vehicle-swatch"
+                          style={{
+                            background:
+                              vehicleColors[vehicleTypeIds.indexOf(p.id)],
+                          }}
+                        />
+                        {vehicleLabels[p.id]}
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
             <div className="map-time">
               <span className={playing ? "pulse-dot" : "time-dot"} />
@@ -957,10 +993,16 @@ export function App() {
                       veh/h
                     </dd>
                   </div>
+                  <div>
+                    <dt>Vehicles</dt>
+                    <dd>{fleetSummary(baseline.fleet)}</dd>
+                  </div>
                 </dl>
                 <p className="hint">
-                  Baseline demand and seed apply to both networks. Unfinished
-                  trips remain active at the observation horizon.
+                  Baseline demand, seed and vehicle settings apply to both
+                  networks. Capture a configured network as baseline to share
+                  its traffic mix. Unfinished trips remain active at the
+                  observation horizon.
                 </p>
                 <button
                   className="primary full"
@@ -1120,6 +1162,7 @@ export function App() {
             />
             <Chart history={history} metric="queue" label="QUEUE · VEHICLES" />
           </div>
+          <VehicleBreakdown metrics={metrics} />
           <div className="table-scroll">
             <table>
               <caption>
@@ -1267,13 +1310,22 @@ export function App() {
           ends.
         </p>
         <p>
+          Choose a single vehicle type or a percentage mix under Vehicle types &
+          attributes. Dimensions affect lane fit and storage; speed,
+          acceleration, braking, gaps and headway affect motion. Defaults are
+          illustrative. Vehicles follow lanes; bus stops and two-wheeler
+          filtering are not modelled.
+        </p>
+        <p>
           Road and vehicle widths are exaggerated for legibility. The city is
           decorative. Plan and isometric views share the same 2D simulation,
           with explicit ramps as the only connections between layers.
         </p>
         <p className="hint">
-          Your scenarios stay in this browser unless you export them. Flux has
-          no AI endpoint, analytics or account system.
+          Device saves stay in this browser. Data & cloud supports accounts,
+          server saves and retained simulation jobs. Map previews fetch public
+          road data; server saves and jobs retain their scenario and source
+          records. Flux has no AI endpoint or analytics.
         </p>
         <button
           className="secondary"

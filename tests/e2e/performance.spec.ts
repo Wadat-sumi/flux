@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { freeRoad, intersection } from "../../src/scenarios/presets";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { mixedFleet } from "../vehicle-fixture";
 
-for (const topology of ["corridor", "signal", "curved"] as const)
+for (const topology of ["corridor", "signal", "curved", "mixed"] as const)
   test(`500+ live agents keep ${topology} rendering smooth and simulation near 30 Hz`, async ({
     page,
   }) => {
@@ -13,7 +14,7 @@ for (const topology of ["corridor", "signal", "curved"] as const)
     if (topology !== "signal") {
       s.edges[0].lanes = 6;
       s.edges[0].width = 21;
-      if (topology === "curved")
+      if (topology === "curved" || topology === "mixed")
         s.edges[0].shape = Array.from({ length: 64 }, (_, i) => ({
           x: ((i + 1) * 5000) / 65,
           y: 200 * Math.sin(((i + 1) * Math.PI * 2) / 65),
@@ -28,6 +29,7 @@ for (const topology of ["corridor", "signal", "curved"] as const)
       }));
     }
     s.demand = s.demand.map((d) => ({ ...d, rate: 7200 }));
+    if (topology === "mixed") s.fleet = mixedFleet();
     await page
       .getByLabel("Import scenario file", { exact: true })
       .setInputFiles({
@@ -98,7 +100,9 @@ for (const topology of ["corridor", "signal", "curved"] as const)
         ? "docs/benchmarks/browser.json"
         : topology === "signal"
           ? "docs/benchmarks/browser-signal.json"
-          : "docs/benchmarks/browser-curved.json",
+          : topology === "mixed"
+            ? "docs/benchmarks/browser-mixed.json"
+            : "docs/benchmarks/browser-curved.json",
       JSON.stringify(report, null, 2) + "\n",
     );
     expect(measurement.rafFps).toBeGreaterThanOrEqual(50);

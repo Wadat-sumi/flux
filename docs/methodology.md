@@ -26,13 +26,13 @@ At source entry and each segment transfer, choose the lane with greatest availab
 
 Dijkstra uses length/speed-limit edge cost and caches routes per origin/destination in the immutable engine network. Reloading an edited scenario reconstructs the engine and invalidates the cache. Cycles are accepted. Unreachable paths terminate safely. No implicit node is created at a geometric crossing.
 
-Lane count changes operational space and interactions. Width affects rendering only. Capacity emerges from IDM gaps, speeds, lane use, signals and reservations. No independent user capacity value is exposed. Results are sensitive to conservative junction throughput.
+Lane count changes operational space and interactions. For explicit vehicle profiles, width also determines lane fit: vehicle width must not exceed road width divided by lane count. Legacy unprofiled scenarios retain their original eligibility rules. Capacity emerges from IDM gaps, speeds, lane use, signals and reservations. No independent user capacity value is exposed. Results are sensitive to conservative junction throughput.
 
 ## Junctions, signals and elevation
 
 A two-axis fixed-time signal groups incoming roads according to their dominant x or y direction. Both axes have the same configurable green/yellow/all-red times and offset. Yellow forbids new entries, and all-red separates groups. The same control handles a T-junction, with unused groups wasting time. It is deliberately not an arbitrary movement-phase signal planner.
 
-Every approaching vehicle treats the junction as a stationary virtual obstacle. Once within 2.4 m of the segment end, a green approach may request a transfer. An exclusive node reservation lasts max(0.8 s, length/max(3 m/s, current speed)). Priority score `2*roadPriority + cumulativeWaiting` orders requests, with ID as final tie-break. Aging reduces starvation. Opposing nonconflicting movements still share the conservative reservation.
+Every approaching vehicle treats the junction as a stationary virtual obstacle. Once within minimum following gap + 0.4 m of the segment end (2.4 m for legacy cars), a green approach may request a transfer. An exclusive node reservation lasts max(0.8 s, length/max(3 m/s, current speed)). Priority score `2*roadPriority + cumulativeWaiting` orders requests, with ID as final tie-break. Aging reduces starvation. Opposing nonconflicting movements still share the conservative reservation.
 
 A transfer requires storage for the whole vehicle plus a minimum gap on the next edge; this prevents box blocking. The boundary transfer abstracts the junction path and inserts the front bumper one vehicle length into the next edge. This omits a few metres of traversal and underestimates intersection travel time. There are no explicit intersection polygons or swept-body collision checks. Lane spacing is validated longitudinally; this does not establish real-world geometric collision safety through turns.
 
@@ -60,3 +60,8 @@ The numerical core uses finite zero sentinels before any trip has completed. Pre
 ## Composite roundabouts and curved geometry
 
 Complete tagged OSM roundabouts are grouped over retained ports and curved circulating arcs. Routing uses operational arc length/free-flow speed; snapshots and Canvas place agents along geometric arc length. Degree-two shape points do not reserve a junction. Real ports retain exclusive node transfer and downstream clearance. Entering vehicles yield while a circulating approach has a vehicle within max(8 metres, 3 seconds × current speed). These explicit approximate rules require observed headways, entry flows and independent queues/travel times for calibration; multilane weaving and mixed vehicle classes remain simplified. Partial rings stay ordinary roads.
+
+
+## Configurable vehicle extension — 7 November 2026
+
+The constants above describe legacy scenarios without a fleet. Explicit profiles replace a/b/emergency clamp/s0/T per type, bound speed by road/type limits and use vehicle-aware routing, storage and lane-change gaps. A separate seeded stream assigns the configured global mixture without changing arrival times. Baseline profiles/assignments are copied to both paired runs. Per-type accounting and null missing report averages complement aggregate metrics. Defaults are illustrative; lane-free mixed traffic and empirical calibration remain pending. Full defaults, numerical rules and short-edge/width constraints: [vehicle types](vehicle-types.md).

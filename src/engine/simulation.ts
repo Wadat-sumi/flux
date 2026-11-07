@@ -5,6 +5,11 @@ import { randomStream } from "./random";
 import { signalState } from "./signals";
 import { DT, MIN_GAP, idmAcceleration, type Vehicle } from "./vehicle";
 import type { Metrics, Sample } from "./statistics";
+import {
+  SNAPSHOT_STRIDE,
+  vehicleTypeIds,
+  type VehicleTypeId,
+} from "../model/vehicles";
 
 type Lanes = Map<string, Vehicle[]>;
 const laneKey = (edge: string, lane: number) => `${edge}:${lane}`;
@@ -24,6 +29,12 @@ export class Simulation {
   private totalTravel = 0;
   private totalWaiting = 0;
   private totalDelay = 0;
+  private readonly typeTotals = new Map(
+    vehicleTypeIds.map((id) => [
+      id,
+      { generated: 0, completed: 0, rejected: 0, totalTravel: 0 },
+    ]),
+  );
   private readonly rng: () => number;
   private readonly reservedUntil = new Map<string, number>();
   private readonly blockedSince = new Map<number, number>();
@@ -54,7 +65,7 @@ export class Simulation {
   }
   private entryLane(
     edge: RoadEdge,
-    length: number,
+    vehicle: Arrival,
     lanes: Lanes,
   ): number | null {
     let best: number | null = null,
@@ -63,7 +74,11 @@ export class Simulation {
       const list = lanes.get(laneKey(edge.id, lane)) ?? [],
         tail = list.at(-1);
       const gap = tail ? tail.position - tail.length : edge.length;
-      if (gap >= length + MIN_GAP && gap > bestGap) {
+      if (
+        gap + (vehicle.profile ? 1e-9 : 0) >=
+          vehicle.length + (vehicle.profile?.minGap ?? MIN_GAP) &&
+        gap > bestGap
+      ) {
         best = lane;
         bestGap = gap;
       }
@@ -76,19 +91,20 @@ export class Simulation {
       this.schedule[this.arrivalIndex].time <= this.time + 1e-9
     ) {
       const a = this.schedule[this.arrivalIndex++];
+      this.typeTotals.get(a.vehicleType ?? "car")!.generated++;
       if (this.vehicles.size + this.pending.length >= this.scenario.maxVehicles)
-        this.rejected++;
+        this.reject(a);
       else this.pending.push(a);
     }
     const remaining: Arrival[] = [];
     for (const a of this.pending) {
-      const route = this.network.route(a.origin, a.destination);
+      const route = this.network.route(a.origin, a.destination, a.profile);
       if (!route?.length) {
-        this.rejected++;
+        this.reject(a);
         continue;
       }
       const edge = this.network.edges.get(route[0])!,
-        lane = this.entryLane(edge, a.length, lanes);
+        lane = this.entryLane(edge, a, lanes);
       if (lane === null) {
         remaining.push(a);
         continue;
@@ -112,6 +128,19 @@ export class Simulation {
       lanes.set(key, [...(lanes.get(key) ?? []), v]);
     }
     this.pending = remaining;
+  }
+  private reject(a: Arrival): void {
+    this.rejected++;
+    this.typeTotals.get(a.vehicleType ?? "car")!.rejected++;
+  }
+  private desiredSpeed(edge: RoadEdge, v: Vehicle): number {
+    return v.profile
+      ? Math.min(
+          v.profile.maxSpeed,
+          edge.speedLimit,
+          edge.speedLimit * v.desiredFactor,
+        )
+      : edge.speedLimit * v.desiredFactor;
   }
   /** Sequential, gap-accepting lane changes. Rebuild only at 1 Hz. */
   private changeLanes(lanes: Lanes): void {
@@ -142,8 +171,16 @@ export class Simulation {
           ? v.position - v.length - behind.position
           : Infinity;
         if (
-          frontGap > Math.max(MIN_GAP, v.speed * 1.2) &&
-          rearGap > Math.max(MIN_GAP, (behind?.speed ?? 0) * 1.2) &&
+          frontGap >
+            Math.max(
+              v.profile?.minGap ?? MIN_GAP,
+              v.speed * (v.profile?.headway ?? 1.2),
+            ) &&
+          rearGap >
+            Math.max(
+              behind?.profile?.minGap ?? MIN_GAP,
+              (behind?.speed ?? 0) * (behind?.profile?.headway ?? 1.2),
+            ) &&
           frontGap > currentGap + 8
         ) {
           current.splice(current.indexOf(v), 1);
@@ -179,8 +216,14 @@ export class Simulation {
             gap = remaining;
             leaderSpeed = 0;
           }
-          const desired = edge.speedLimit * v.desiredFactor;
-          v.acceleration = idmAcceleration(v.speed, desired, gap, leaderSpeed);
+          const desired = this.desiredSpeed(edge, v);
+          v.acceleration = idmAcceleration(
+            v.speed,
+            desired,
+            gap,
+            leaderSpeed,
+            v.profile,
+          );
           let speed = Math.max(
             0,
             Math.min(desired, v.speed + v.acceleration * DT),
@@ -189,7 +232,7 @@ export class Simulation {
           if (leader)
             position = Math.min(
               position,
-              leader.position - leader.length - MIN_GAP,
+              leader.position - leader.length - (v.profile?.minGap ?? MIN_GAP),
             );
           position = Math.min(position, edge.length);
           position = Math.max(v.position, position);
@@ -203,7 +246,8 @@ export class Simulation {
       // Age offsets priority to avoid starvation; stable IDs break ties.
       const candidates = [...this.vehicles.values()].filter(
         (v) =>
-          this.network.edges.get(v.edge)!.length - v.position < MIN_GAP + 0.4,
+          this.network.edges.get(v.edge)!.length - v.position <
+          (v.profile?.minGap ?? MIN_GAP) + 0.4,
       );
       candidates.sort(
         (a, b) =>
@@ -219,9 +263,12 @@ export class Simulation {
           if (v.position < edge.length - 1e-6) continue;
           this.completed++;
           const travel = this.time + DT - v.entryTime;
+          const totals = this.typeTotals.get(v.vehicleType ?? "car")!;
+          totals.completed++;
+          totals.totalTravel += travel;
           const free = v.route.reduce((sum, id) => {
             const e = this.network.edges.get(id)!;
-            return sum + e.length / (e.speedLimit * v.desiredFactor);
+            return sum + e.length / this.desiredSpeed(e, v);
           }, 0);
           this.totalTravel += travel;
           this.totalWaiting += v.waiting;
@@ -258,14 +305,14 @@ export class Simulation {
           )
             continue;
         }
-        const lane = this.entryLane(next, v.length, lanes);
+        const lane = this.entryLane(next, v, lanes);
         if (lane === null) {
           const since = this.blockedSince.get(v.id) ?? this.time;
           this.blockedSince.set(v.id, since);
           if (this.time - since >= 120) {
             this.vehicles.delete(v.id);
             this.blockedSince.delete(v.id);
-            this.rejected++;
+            this.reject(v);
             const list = lanes.get(laneKey(v.edge, v.lane))!;
             list.splice(list.indexOf(v), 1);
             this.warnings.push({
@@ -284,7 +331,7 @@ export class Simulation {
         v.edge = next.id;
         v.lane = lane;
         v.position = v.length;
-        v.speed = Math.min(v.speed, next.speedLimit * v.desiredFactor);
+        v.speed = Math.min(v.speed, this.desiredSpeed(next, v));
         const key = laneKey(v.edge, v.lane);
         lanes.set(key, [...(lanes.get(key) ?? []), v]);
         this.reservedUntil.set(
@@ -341,12 +388,34 @@ export class Simulation {
       meanDelay: this.completed ? this.totalDelay / this.completed : 0,
       throughput: this.time ? (this.completed * 3600) / this.time : 0,
       queue: this.pending.length + edges.reduce((s, e) => s + e.queue, 0),
+      vehicleTypes: vehicleTypeIds.map((id) => {
+        const cars = moving.filter((v) => (v.vehicleType ?? "car") === id),
+          pending = this.pending.filter(
+            (v) => (v.vehicleType ?? "car") === id,
+          ).length,
+          totals = this.typeTotals.get(id)!;
+        return {
+          id,
+          generated: totals.generated,
+          active: cars.length + pending,
+          moving: cars.length,
+          pending,
+          completed: totals.completed,
+          rejected: totals.rejected,
+          meanSpeed: cars.length
+            ? cars.reduce((sum, v) => sum + v.speed, 0) / cars.length
+            : 0,
+          meanTravelTime: totals.completed
+            ? totals.totalTravel / totals.completed
+            : 0,
+        };
+      }),
       edges,
     };
   }
-  /** [id, edgeIndex, lane, position(m), speed(m/s), x, y, angle, elevation] */
+  /** [id, edgeIndex, lane, front position(m), speed(m/s), x, y, angle, elevation, length, width, typeIndex] */
   snapshot(): Float32Array {
-    const data = new Float32Array(this.vehicles.size * 9),
+    const data = new Float32Array(this.vehicles.size * SNAPSHOT_STRIDE),
       indices = new Map(this.scenario.edges.map((e, i) => [e.id, i]));
     let offset = 0;
     for (const v of this.vehicles.values()) {
@@ -362,10 +431,13 @@ export class Simulation {
           p.y,
           p.angle,
           p.layer,
+          v.length,
+          v.profile?.width ?? 1.8,
+          vehicleTypeIds.indexOf((v.vehicleType ?? "car") as VehicleTypeId),
         ],
         offset,
       );
-      offset += 9;
+      offset += SNAPSHOT_STRIDE;
     }
     return data;
   }

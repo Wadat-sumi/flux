@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fleetSchema } from "./vehicles";
 
 const id = z
   .string()
@@ -70,6 +71,7 @@ export const scenarioSchema = z
     nodes: z.array(nodeSchema).max(300),
     edges: z.array(edgeSchema).max(1000),
     roundabouts: z.array(roundaboutSchema).max(50).optional(),
+    fleet: fleetSchema.optional(),
     demand: z
       .array(
         z

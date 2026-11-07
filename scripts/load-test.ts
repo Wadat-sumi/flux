@@ -7,6 +7,7 @@ import { openDatabase, migrate } from "../server/database";
 import { createApp } from "../server/app";
 import { hashPassword } from "../server/security";
 import { intersection } from "../src/scenarios/presets";
+import { defaultVehicleProfiles } from "../src/model/vehicles";
 
 const users = 120,
   steadySeconds = 20,
@@ -23,7 +24,14 @@ assert(address && typeof address !== "string");
 const url = `http://127.0.0.1:${address.port}`,
   password = "Load-fixture-only-passphrase!",
   hashed = await hashPassword(password),
-  scenario = { ...intersection(), duration: 60 };
+  scenario = {
+    ...intersection(),
+    duration: 60,
+    fleet: defaultVehicleProfiles.map((p, i) => ({
+      ...p,
+      share: [40, 20, 10, 10, 10, 10][i],
+    })),
+  };
 interface Client {
   email: string;
   cookie: string;
@@ -128,7 +136,7 @@ try {
     }),
   );
   const elapsed = (performance.now() - steadyStart) / 1000;
-  const heavy = { ...intersection(), duration: 3600, maxVehicles: 10000 },
+  const heavy = { ...scenario, duration: 3600, maxVehicles: 10000 },
     accepted: { client: Client; id: string }[] = [];
   await Promise.all(
     clients.map(async (client) => {
@@ -181,7 +189,7 @@ try {
       distinctAuthenticatedSessions: clients.length,
       steadySeconds: elapsed,
       workload:
-        "120 concurrent HTTP clients: real password login; separate owned scenario; 20 s paced read/update/job-list/session mix; simultaneous job admission; health checks under CPU worker load; cancellation",
+        "120 concurrent HTTP clients: real password login; separate owned scenario with six vehicle profiles (40/20/10/10/10/10 synthetic mix); 20 s paced read/update/job-list/session mix; simultaneous mixed-vehicle job admission; health checks under CPU worker load; cancellation",
       database:
         "Filesystem-persistent PGlite (embedded PostgreSQL); Azure managed PostgreSQL not measured",
       steadyRequests: steady.length,

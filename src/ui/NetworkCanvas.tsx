@@ -19,6 +19,7 @@ import {
   type RoundaboutOutline,
 } from "./roundabout-geometry";
 import { roadPoints, pathLength, samplePath } from "../model/road-geometry";
+import { SNAPSHOT_STRIDE, vehicleColors } from "../model/vehicles";
 
 export interface Frame {
   states: Float32Array;
@@ -314,7 +315,7 @@ export function NetworkCanvas(props: Props) {
         previousArray = previous.current?.states;
         previousIds = new Map();
         if (previousArray)
-          for (let i = 0; i < previousArray.length; i += 9)
+          for (let i = 0; i < previousArray.length; i += SNAPSHOT_STRIDE)
             previousIds.set(previousArray[i], i);
       }
       const alpha =
@@ -450,14 +451,20 @@ export function NetworkCanvas(props: Props) {
         ctx.stroke();
         ctx.restore();
         const edgeIndex = s.edges.indexOf(e);
-        for (let i = 0; i < states.length; i += 9) {
+        for (let i = 0; i < states.length; i += SNAPSHOT_STRIDE) {
           if (states[i + 1] !== edgeIndex) continue;
           let pos = states[i + 3];
           const old = previousIds.get(states[i]);
           if (old !== undefined && previousArray?.[old + 1] === edgeIndex)
             pos =
               previousArray[old + 3] + (pos - previousArray[old + 3]) * alpha;
-          const t = Math.max(0, Math.min(1, pos / e.length)),
+          const physicalLength = states[i + 9],
+            physicalWidth = states[i + 10],
+            typeIndex = states[i + 11];
+          const t = Math.max(
+              0,
+              Math.min(1, (pos - physicalLength / 2) / e.length),
+            ),
             n = samplePath(world, t),
             offset = ((states[i + 2] + 0.5) / e.lanes - 0.5) * roadWidth(e),
             ux = Math.cos(n.angle),
@@ -468,13 +475,14 @@ export function NetworkCanvas(props: Props) {
             y = n.y + ny * offset,
             l = a.layer + (b.layer - a.layer) * t,
             carLength = Math.min(
-              6,
-              (len / e.length) * 6,
+              physicalLength,
+              (len / e.length) * physicalLength,
               roundabout ? roundabout.clearance * 0.5 : Infinity,
             ),
-            carWidth = roundabout
-              ? Math.min(3.5, (roadWidth(e) / e.lanes) * 0.7)
-              : 3.5;
+            carWidth = Math.min(
+              (physicalWidth * roadWidth(e)) / e.width,
+              (roadWidth(e) / e.lanes) * 0.85,
+            );
           poly(
             [
               [-carLength / 2, -carWidth / 2],
@@ -484,16 +492,19 @@ export function NetworkCanvas(props: Props) {
             ].map(([u, v]) =>
               point(x + ux * u + nx * v, y + uy * u + ny * v, l),
             ),
-            palette.car,
+            vehicleColors[typeIndex] ?? palette.car,
           );
-          if (carLength * scale >= 5 && states.length < 9000) {
+          if (
+            carLength * scale >= 5 &&
+            states.length < SNAPSHOT_STRIDE * 1000
+          ) {
             const [px, py] = point(x, y, l);
             ctx.fillStyle = "#C1B7D1";
             ctx.fillRect(
-              px - 1.6 * scale,
-              py - 1.3 * scale,
-              3.2 * scale,
-              2.6 * scale,
+              px - Math.min(1.6, carLength * 0.3) * scale,
+              py - Math.min(1.3, carWidth * 0.3) * scale,
+              Math.min(3.2, carLength * 0.6) * scale,
+              Math.min(2.6, carWidth * 0.6) * scale,
             );
           }
         }
@@ -616,7 +627,15 @@ export function NetworkCanvas(props: Props) {
       }
       canvas.dataset.labels = String(p.labels);
       canvas.dataset.roundabouts = String(s.roundabouts?.length ?? 0);
-      canvas.dataset.agents = String(states.length / 9);
+      canvas.dataset.agents = String(states.length / SNAPSHOT_STRIDE);
+      canvas.dataset.vehicleTypes = JSON.stringify(
+        Object.fromEntries(
+          (current.current?.metrics.vehicleTypes ?? []).map((m) => [
+            m.id,
+            m.moving,
+          ]),
+        ),
+      );
       canvas.dataset.time = String(current.current?.metrics.time ?? 0);
       raf = requestAnimationFrame(draw);
     };

@@ -566,6 +566,7 @@ export function importDemand(input: unknown): ImportedData {
   const warnings = new Set([
     "Observed counts are converted to constant mean OD rates (count × 3600 / observed seconds); this is not time-varying replay or empirical calibration.",
     "Inputs must count origin-to-destination trips. Link/station counts alone cannot identify OD demand.",
+    "Vehicle types, shares and behaviour use scenario settings; they are not inferred from these unclassified counts.",
   ]);
   return {
     scenario: result,

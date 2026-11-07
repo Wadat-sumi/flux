@@ -26,7 +26,7 @@ Visit http://127.0.0.1:5173. Vite proxies /api to the Node backend on 3001. Loca
 - **Data & cloud:** local account signup/login, owner-scoped server scenario library, retained OSM/observed-count imports with source/license/time/hash, server jobs/progress/cancellation/history and report downloads. Jobs continue after closing the browser. Production registration defaults off.
 - **Device saves and JSON:** browser-local saves and portable versioned scenario import/export remain available. Server reports/saves retain import provenance; plain scenario JSON/device saves do not.
 
-A real, attributed small Bengaluru road sample is included; it contains **no assumed observed traffic counts**. The observed-demand importer requires mapped OD vehicle counts and converts the observation exposure to constant mean rates. [Minimum data request](docs/data-request.md) and [six-city source review](docs/real-data-sources.md) explain what is still missing for calibration. The model remains simplified passenger-vehicle traffic, not a calibrated forecast of Indian mixed traffic.
+A real, attributed small Bengaluru road sample is included; it contains **no assumed observed traffic counts**. The observed-demand importer requires mapped OD vehicle counts and converts the observation exposure to constant mean rates. [Minimum data request](docs/data-request.md) and [six-city source review](docs/real-data-sources.md) explain what is still missing for calibration. [Vehicle types & attributes](docs/vehicle-types.md) supports six configurable classes or a percentage mix, including dimensions and driving parameters. This remains a simplified lane-based model without calibrated Indian mixed-traffic behaviour.
 
 ## Secrets and TomTom
 
