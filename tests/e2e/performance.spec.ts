@@ -2,8 +2,15 @@ import { expect, test } from "@playwright/test";
 import { freeRoad, intersection } from "../../src/scenarios/presets";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { mixedFleet } from "../vehicle-fixture";
+import { defaultVehicleProfiles } from "../../src/model/vehicles";
 
-for (const topology of ["corridor", "signal", "curved", "mixed"] as const)
+for (const topology of [
+  "corridor",
+  "signal",
+  "curved",
+  "mixed",
+  "suggestedMix",
+] as const)
   test(`500+ live agents keep ${topology} rendering smooth and simulation near 30 Hz`, async ({
     page,
   }) => {
@@ -14,7 +21,11 @@ for (const topology of ["corridor", "signal", "curved", "mixed"] as const)
     if (topology !== "signal") {
       s.edges[0].lanes = 6;
       s.edges[0].width = 21;
-      if (topology === "curved" || topology === "mixed")
+      if (
+        topology === "curved" ||
+        topology === "mixed" ||
+        topology === "suggestedMix"
+      )
         s.edges[0].shape = Array.from({ length: 64 }, (_, i) => ({
           x: ((i + 1) * 5000) / 65,
           y: 200 * Math.sin(((i + 1) * Math.PI * 2) / 65),
@@ -30,6 +41,8 @@ for (const topology of ["corridor", "signal", "curved", "mixed"] as const)
     }
     s.demand = s.demand.map((d) => ({ ...d, rate: 7200 }));
     if (topology === "mixed") s.fleet = mixedFleet();
+    if (topology === "suggestedMix")
+      s.fleet = defaultVehicleProfiles.map((p) => ({ ...p }));
     await page
       .getByLabel("Import scenario file", { exact: true })
       .setInputFiles({
@@ -80,6 +93,8 @@ for (const topology of ["corridor", "signal", "curved", "mixed"] as const)
         p95FrameMs: intervals[Math.floor(intervals.length * 0.95)],
         simulationTicksPerSecond: ((timeEnd - timeStart) * 30 * 1000) / elapsed,
         agentsAtEnd: Number(canvas.dataset.agents),
+        renderedSprites3d: Number(canvas.dataset.sprites3d),
+        renderedFaces: Number(canvas.dataset.spriteFaces),
       };
     });
     await page
@@ -102,11 +117,15 @@ for (const topology of ["corridor", "signal", "curved", "mixed"] as const)
           ? "docs/benchmarks/browser-signal.json"
           : topology === "mixed"
             ? "docs/benchmarks/browser-mixed.json"
-            : "docs/benchmarks/browser-curved.json",
+            : topology === "suggestedMix"
+              ? "docs/benchmarks/browser-default-mix.json"
+              : "docs/benchmarks/browser-curved.json",
       JSON.stringify(report, null, 2) + "\n",
     );
     expect(measurement.rafFps).toBeGreaterThanOrEqual(50);
     expect(measurement.canvasFps).toBeGreaterThanOrEqual(50);
     expect(measurement.simulationTicksPerSecond).toBeGreaterThanOrEqual(29.5);
     expect(measurement.agentsAtEnd).toBeGreaterThanOrEqual(500);
+    expect(measurement.renderedFaces).toBeGreaterThan(0);
+    expect(measurement.renderedSprites3d).toBeGreaterThan(0);
   });

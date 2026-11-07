@@ -1,4 +1,4 @@
-import { vehicleGlyphs } from "./vehicle-shapes";
+import { projectVehicleSprite } from "./vehicle-sprites";
 import { useEffect, useRef, useState } from "react";
 import type { Scenario, RoadEdge, RoadNode } from "../model/schema";
 import type { Metrics } from "../engine/statistics";
@@ -117,6 +117,8 @@ export function NetworkCanvas(props: Props) {
     const draw = (now: number) => {
       const p = propsRef.current,
         { scenario: s, view } = p;
+      let spriteFaces = 0,
+        sprites3d = 0;
       if (s !== cachedScenario) {
         cachedScenario = s;
         net = new Network(s);
@@ -452,8 +454,16 @@ export function NetworkCanvas(props: Props) {
         ctx.stroke();
         ctx.restore();
         const edgeIndex = s.edges.indexOf(e);
-        for (let i = 0; i < states.length; i += SNAPSHOT_STRIDE) {
-          if (states[i + 1] !== edgeIndex) continue;
+        const edgeVehicles: number[] = [];
+        for (let i = 0; i < states.length; i += SNAPSHOT_STRIDE)
+          if (states[i + 1] === edgeIndex) edgeVehicles.push(i);
+        // Painter order within a road follows camera depth, independent of arrival/ID order.
+        if (view === "iso")
+          edgeVehicles.sort(
+            (a, b) =>
+              states[a + 5] + states[a + 6] - states[b + 5] - states[b + 6],
+          );
+        for (const i of edgeVehicles) {
           let pos = states[i + 3];
           const old = previousIds.get(states[i]);
           if (old !== undefined && previousArray?.[old + 1] === edgeIndex)
@@ -481,31 +491,43 @@ export function NetworkCanvas(props: Props) {
               roundabout ? roundabout.clearance * 0.5 : Infinity,
             ),
             carWidth = Math.min(
-              (physicalWidth * roadWidth(e)) / e.width,
+              physicalWidth * (carLength / physicalLength),
               (roadWidth(e) / e.lanes) * 0.85,
             );
           const shape = bodyShapes[states[i + 12]] ?? "hatchback";
+          const centre = point(x, y, l),
+            radius = (carLength + carWidth + 4) * scale;
+          if (
+            centre[0] + radius < 0 ||
+            centre[0] - radius > width ||
+            centre[1] + radius < 0 ||
+            centre[1] - radius > height
+          )
+            continue;
           const detail =
-            carLength * scale >= 7 && states.length < SNAPSHOT_STRIDE * 1000;
-          for (const glyph of vehicleGlyphs[shape]) {
-            if (glyph.role !== "body" && !detail) continue;
+            carLength * scale >= 12 && states.length < SNAPSHOT_STRIDE * 1000;
+          const faces = projectVehicleSprite(
+            shape,
+            {
+              length: carLength,
+              width: carWidth,
+              angle: n.angle,
+              heightScale: Math.min(1, carLength / physicalLength),
+            },
+            view,
+            vehicleColors[typeIndex] ?? palette.car,
+            detail,
+          );
+          sprites3d++;
+          spriteFaces += faces.filter((f) => f.material !== "shadow").length;
+          for (const face of faces)
             poly(
-              glyph.points.map(([u, v]) =>
-                point(
-                  x + ux * u * carLength + nx * v * carWidth,
-                  y + uy * u * carLength + ny * v * carWidth,
-                  l,
-                ),
-              ),
-              glyph.role === "body"
-                ? (vehicleColors[typeIndex] ?? palette.car)
-                : glyph.role === "tyre"
-                  ? "#51495C"
-                  : glyph.role === "window"
-                    ? "#EEE9F5"
-                    : "#B6ABC8",
+              face.points.map(([px, py]) => [
+                centre[0] + px * scale,
+                centre[1] + py * scale,
+              ]),
+              face.fill,
             );
-          }
         }
         if (
           p.labels &&
@@ -625,6 +647,9 @@ export function NetworkCanvas(props: Props) {
         lastMeasure = now;
       }
       canvas.dataset.labels = String(p.labels);
+      canvas.dataset.vehicleRenderer = "3d-solids";
+      canvas.dataset.sprites3d = String(sprites3d);
+      canvas.dataset.spriteFaces = String(spriteFaces);
       canvas.dataset.roundabouts = String(s.roundabouts?.length ?? 0);
       canvas.dataset.agents = String(states.length / SNAPSHOT_STRIDE);
       canvas.dataset.vehicleTypes = JSON.stringify(

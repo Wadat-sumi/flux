@@ -1,0 +1,19 @@
+{
+  "recordedAt": "2026-11-07T16:44:40.932Z",
+  "browser": "Playwright Chromium",
+  "topology": "suggestedMix",
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "agentsAtStart": 594,
+  "elapsedMs": 4009.699999988079,
+  "rafFps": 60.10424720071739,
+  "canvasFps": 60,
+  "p95FrameMs": 16.799999999999727,
+  "simulationTicksPerSecond": 30.176821208658712,
+  "agentsAtEnd": 603,
+  "renderedSprites3d": 603,
+  "renderedFaces": 7277,
+  "note": "Real built app, main-thread canvas, module worker, live metrics; local production QA host, not deployed Azure."
+}

@@ -2,6 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { intersection } from "../../src/scenarios/presets";
 import { mixedFleet } from "../vehicle-fixture";
+import {
+  defaultVehicleProfiles,
+  vehicleLabels,
+} from "../../src/model/vehicles";
 
 async function exportCurrent(page: Page) {
   const pending = page.waitForEvent("download");
@@ -11,6 +15,91 @@ async function exportCurrent(page: Page) {
 }
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+});
+test("new presets default to the suggested mix, all six 3D previews render, and restoring shares preserves custom attributes", async ({
+  page,
+}) => {
+  await page.getByText("Vehicle types & attributes", { exact: true }).click();
+  await expect(
+    page.getByLabel("Vehicle selection", { exact: true }),
+  ).toHaveValue("mixed");
+  for (const profile of defaultVehicleProfiles) {
+    await expect(
+      page.getByLabel(`${vehicleLabels[profile.id]} share (%)`, {
+        exact: true,
+      }),
+    ).toHaveValue(String(profile.share));
+    await page
+      .getByLabel("Edit vehicle attributes", { exact: true })
+      .selectOption(profile.id);
+    const preview = page.getByRole("img", {
+      name: `${vehicleLabels[profile.id]} 3D sprite preview`,
+    });
+    await expect(preview).toBeVisible();
+    expect(Number(await preview.getAttribute("data-faces"))).toBeGreaterThan(
+      10,
+    );
+    await expect(
+      preview.locator(
+        'polygon[data-material="glass"], polygon[data-material="metal"]',
+      ),
+    ).not.toHaveCount(0);
+    await preview.screenshot({
+      path: `docs/screenshots/vehicle-3d-${profile.id}.png`,
+    });
+  }
+  await page
+    .getByLabel("Vehicle selection", { exact: true })
+    .selectOption("car");
+  await page.getByLabel("Car length (m)", { exact: true }).fill("4.5");
+  await page
+    .getByRole("button", { name: "Use suggested urban mix", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Vehicle selection", { exact: true }),
+  ).toHaveValue("mixed");
+  for (const profile of defaultVehicleProfiles)
+    await expect(
+      page.getByLabel(`${vehicleLabels[profile.id]} share (%)`, {
+        exact: true,
+      }),
+    ).toHaveValue(String(profile.share));
+  await expect(page.getByLabel("Car length (m)", { exact: true })).toHaveValue(
+    "4.5",
+  );
+  await page
+    .getByRole("button", { name: "Apply vehicle settings", exact: true })
+    .click();
+  const saved = await exportCurrent(page);
+  expect(saved.fleet.find((p: { id: string }) => p.id === "car").length).toBe(
+    4.5,
+  );
+  expect(saved.fleet.map((p: { share: number }) => p.share)).toEqual([
+    30, 50, 12, 4, 2, 2,
+  ]);
+  await page.getByText("Demand & simulation settings", { exact: true }).click();
+  for (let i = 1; i <= 3; i++) {
+    await page
+      .getByRole("button", { name: "Advance 20 seconds", exact: true })
+      .click();
+    await expect(page.locator("canvas")).toHaveAttribute(
+      "data-time",
+      String(i * 20),
+    );
+  }
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-vehicle-renderer",
+    "3d-solids",
+  );
+  expect(
+    Number(await page.locator("canvas").getAttribute("data-sprite-faces")),
+  ).toBeGreaterThan(0);
+  await page.getByText("Demand & simulation settings", { exact: true }).click();
+  await page.screenshot({ path: "docs/screenshots/mixed-traffic-3d.png" });
+  await page
+    .getByLabel("Scenario", { exact: true })
+    .selectOption("intersection");
+  expect((await exportCurrent(page)).fleet).toEqual(defaultVehicleProfiles);
 });
 test("reference dimensions retain millimetres, source notes distinguish dynamics, and old custom profiles require explicit reset", async ({
   page,
@@ -48,7 +137,7 @@ test("reference dimensions retain millimetres, source notes distinguish dynamics
     page.getByLabel("Two-wheeler desired acceleration (m/s²)", { exact: true }),
   ).toHaveValue("2.825");
   await expect(
-    page.getByRole("img", { name: "Two-wheeler footprint preview" }),
+    page.getByRole("img", { name: "Two-wheeler 3D sprite preview" }),
   ).toBeVisible();
   const old = intersection();
   old.fleet = [
@@ -101,7 +190,7 @@ test("reference dimensions retain millimetres, source notes distinguish dynamics
     .getByLabel("Edit vehicle attributes", { exact: true })
     .selectOption("bus");
   await page
-    .getByRole("img", { name: "Bus footprint preview" })
+    .getByRole("img", { name: "Bus 3D sprite preview" })
     .scrollIntoViewIfNeeded();
   await page.screenshot({
     path: "docs/screenshots/vehicle-reference-settings.png",
@@ -182,6 +271,7 @@ test("invalid mixes and braking are rejected, reset is usable, and phone forms f
     .getByRole("button", { name: "Show controls", exact: true })
     .click();
   await page.getByText("Vehicle types & attributes", { exact: true }).click();
+  await page.getByLabel("Vehicle selection").selectOption("car");
   await page.getByLabel("Vehicle selection").selectOption("mixed");
   await page.getByLabel("Car share (%)", { exact: true }).fill("80");
   await expect(
@@ -201,11 +291,14 @@ test("invalid mixes and braking are rejected, reset is usable, and phone forms f
     .getByRole("button", { name: "Apply vehicle settings", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText("Emergency braking");
-  await expect(page.getByRole("group", { name: "Vehicle colours" })).toHaveText(
-    "Car",
-  );
   await expect(
-    page.getByText("Applied: Car 100%", { exact: true }),
+    page.getByRole("group", { name: "Vehicle colours" }).locator("span"),
+  ).toHaveCount(6);
+  await expect(
+    page.getByText(
+      "Applied: Car 30% · Two-wheeler 50% · Auto-rickshaw 12% · Light commercial 4% · Bus 2% · Truck 2%",
+      { exact: true },
+    ),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Reset selected type defaults", exact: true })

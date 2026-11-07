@@ -1,0 +1,25 @@
+{
+  "revision": "2026-11-07-urban-guess1",
+  "classification": "synthetic engineering assumption",
+  "units": "percent of motor-vehicle arrivals",
+  "shares": {
+    "car": 30,
+    "twoWheeler": 50,
+    "autoRickshaw": 12,
+    "lightCommercial": 4,
+    "bus": 2,
+    "truck": 2
+  },
+  "rationale": "Owner-authorized educated starting guess for an urban Indian major-road scenario: two-wheelers form the largest group, cars the next, with a visible auto-rickshaw share and smaller commercial/bus/truck shares. Editable and shared across all OD pairs; not a measured corridor split or a city-wide estimate.",
+  "createdAt": "2026-11-07T16:35:49.836799+00:00",
+  "context": {
+    "title": "DULT Comprehensive Mobility Plan for Bengaluru, October 2019 draft",
+    "url": "https://data-opencity.sgp1.cdn.digitaloceanspaces.com/Documents/Recent/Bengaluru-Comprehensive-Mobility-Plan-October-2019-Draft.pdf",
+    "retrievedAt": "2026-11-07T16:32:39.451806+00:00",
+    "sha256": "dc0af3073bd7bbc74e03edcd72c934512c8ae3d5c76777c31c37269843a6ca1a",
+    "bytes": 6694328,
+    "license": "No open reuse licence verified; contextual review only, no report redistributed",
+    "location": "PDF page 60, Figure 2-5 and accompanying paragraph",
+    "use": "Qualitative context only: this is historical registered vehicle composition, not corridor traffic flow. No numeric registration shares were adopted as demand shares. No report data ingested or redistributed."
+  }
+}

@@ -182,14 +182,15 @@ describe("first-class grouped roundabouts", () => {
     for (let i = 0; i < 9000; i++) {
       a.step();
       for (const edge of a.network.roundaboutEdges) {
-        const cars = [...a.vehicles.values()]
-          .filter((v) => v.edge === edge)
-          .sort((x, y) => y.position - x.position);
-        for (let j = 1; j < cars.length; j++)
-          if (cars[j].lane === cars[j - 1].lane)
+        for (let lane = 0; lane < a.network.edges.get(edge)!.lanes; lane++) {
+          const cars = [...a.vehicles.values()]
+            .filter((v) => v.edge === edge && v.lane === lane)
+            .sort((x, y) => y.position - x.position);
+          for (let j = 1; j < cars.length; j++)
             expect(
               cars[j - 1].position - cars[j - 1].length - cars[j].position,
-            ).toBeGreaterThanOrEqual(1.999);
+            ).toBeGreaterThanOrEqual((cars[j].profile?.minGap ?? 2) - 1e-6);
+        }
       }
     }
     b.step(9000);

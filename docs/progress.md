@@ -147,3 +147,13 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Full gate **376 distinct cases** (331 headless/42 app-browser/3 worker), type/lint/build/security scan/audit passed. Mixed 566–572-agent rendering: 60 FPS/~30.18 ticks/s. Repeated 120-user API test: 11,431 requests/20.15 s, 567.40/s, p95 20.87 ms, zero unexpected errors; 20 admitted/100 expected 429/one worker. Evidence/limitations are recorded in testing.md.
 - Native reference settings verified; local frontend/API restarted and healthy. No Azure actions, real secrets, other coding agents or raw-log edits.
 - Clock 2026-11-07T21:48:12.806652+05:30, elapsed 47.44 h from the original start; 12.56 h to the internal target and 24.56 h to the hard deadline. Original deadlines unchanged.
+
+
+## Mixed defaults and original 3D sprites
+
+- New UI presets and OSM imports use the owner-requested educated guess: 50% two-wheelers, 30% cars, 12% autos, 4% LCVs, 2% buses and 2% trucks. Shares are marked as assumptions; context/rationale/provenance retained. Suggested-share reset preserves custom attributes; saved/legacy scenarios retain explicit settings.
+- Added six shaded original 3D vehicle solids with cabins, glass, wheels, shadows, orientation/back-face/depth rules, small-sprite detail control, proportional body dimensions and shared SVG preview. Visual heights never enter engine physics.
+- Full gate **391 cases** (344 headless/44 app-browser/3 worker), type/lint/build/security scan/audit passed. Suggested mix rendered 594–603 vehicles at 60 FPS/~30.18 ticks/s. Repeated 120-user API workload: 11,373 requests/20.18 s, p95 29.63 ms, zero unexpected errors; 20 admitted/100 expected 429/one worker. See testing.md for scope and the corrected per-class roundabout regression assertion.
+- Native preview verified all six percentages and 3D vehicles at 60 s. No real secrets, Azure changes, external code-generation/other agents or raw-log edits.
+- Clock 2026-11-07T22:16:26.138731+05:30, elapsed 47.91 h; 12.09 h to internal target and 24.09 h to hard deadline. Original start/deadlines unchanged.
+- Owner now prioritizes using the researched real data step by step. Begin with the real JC Road geometry and map/source-sink audit; suitable permitted OD/control observations still need preparation/acquisition.

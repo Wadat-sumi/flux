@@ -1,5 +1,6 @@
 import { z } from "zod";
 import references from "../data/vehicle-references.json" with { type: "json" };
+import trafficMix from "../data/traffic-mix.json" with { type: "json" };
 
 export const vehicleTypeIds = [
   "car",
@@ -90,13 +91,16 @@ export const vehicleColors = [
   "#AB5366",
   "#665E50",
 ];
+/** Educated urban-road starting assumption, not surveyed traffic or registration shares. */
+export const suggestedVehicleShares: Readonly<Record<VehicleTypeId, number>> =
+  trafficMix.shares;
 /** OEM footprints/capabilities and explicitly classified model/proxy dynamics; not calibrated fleet averages. */
 export const defaultVehicleProfiles: readonly VehicleProfile[] =
   vehicleTypeIds.map((id) => {
     const reference = references.profiles[id];
     return vehicleProfileSchema.parse({
       id,
-      share: id === "car" ? 100 : 0,
+      share: suggestedVehicleShares[id],
       length: reference.length,
       width: reference.width,
       maxSpeed: reference.maxSpeedKmh / 3.6,

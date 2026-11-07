@@ -11,7 +11,7 @@ Flux is an educational experimentation tool, not a calibrated or validated forec
 - Artificial timeout rejection resolves gridlock and is surfaced in warnings.
 - Finite observation horizons censor unfinished trips. Completed-trip averages alone can favor a heavily congested scenario, so active/rejected counts must be shown.
 - Browser performance has been measured on one macOS arm64 machine in Chromium with 544–552 on-road agents in straight and curved corridors, and 624–630 in the signal-network case. The benchmark does not guarantee the same FPS on every device, maximum allowed graph or background tab. Rendering and numerical physics are decoupled; overloaded wall-clock playback slows without changing the numerical step.
-- Road and vehicle widths are visually exaggerated. Decorative blocks are illustrative and may be hidden; they are not GIS geometry.
+- Road widths are visually exaggerated. Vehicle solids retain proportional body length/width with bounded display caps; heights are schematic visual assumptions. Decorative blocks are illustrative and may be hidden; they are not GIS geometry.
 - Local saves are per browser origin, bounded to 12 scenarios and 4 MB. They do not sync across devices or from localhost to Azure; use JSON export/import.
 - Live Azure authentication, infrastructure plan/apply, public deployment and live-host header checks are deferred to the joint review on 6 November 2026. Local QA host checks do not prove Azure enforcement.
 

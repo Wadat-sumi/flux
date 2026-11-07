@@ -6,9 +6,11 @@ import {
   vehicleTypeIds,
   bodyShapes,
   profileMatchesReference,
+  suggestedVehicleShares,
 } from "../src/model/vehicles";
 import references from "../src/data/vehicle-references.json" with { type: "json" };
 import { vehicleGlyphs } from "../src/ui/vehicle-shapes";
+import { projectVehicleSprite, vehicleMeshes } from "../src/ui/vehicle-sprites";
 import {
   parseScenario,
   exportScenario,
@@ -322,7 +324,7 @@ test.each([
   expect(() =>
     parseScenario({
       ...freeRoad(),
-      fleet: [{ ...defaultVehicleProfiles[0], ...patch }],
+      fleet: [{ ...defaultVehicleProfiles[0], share: 100, ...patch }],
     }),
   ).toThrow();
 });
@@ -429,7 +431,11 @@ test("all six original silhouettes differ and stay inside the physical footprint
     }
 });
 test("body shape overrides affect the packed visual shape while physical dimensions remain unchanged", () => {
-  const p = { ...defaultVehicleProfiles[0], bodyShape: "pickup" as const };
+  const p = {
+    ...defaultVehicleProfiles[0],
+    share: 100,
+    bodyShape: "pickup" as const,
+  };
   const sim = new Simulation({
     ...freeRoad(),
     demand: [{ origin: "source", destination: "sink", rate: 600 }],
@@ -442,5 +448,145 @@ test("body shape overrides affect the packed visual shape while physical dimensi
     expect(states[i + 12]).toBe(bodyShapes.indexOf("pickup"));
     expect(states[i + 9]).toBeCloseTo(p.length, 5);
     expect(states[i + 10]).toBeCloseTo(p.width, 5);
+  }
+});
+test("suggested mix is a complete editable assumption and seeds all six vehicle classes", () => {
+  expect(suggestedVehicleShares).toEqual({
+    car: 30,
+    twoWheeler: 50,
+    autoRickshaw: 12,
+    lightCommercial: 4,
+    bus: 2,
+    truck: 2,
+  });
+  expect(
+    fleetSchema
+      .parse(defaultVehicleProfiles)
+      .reduce((sum, p) => sum + p.share, 0),
+  ).toBe(100);
+  const s = {
+    ...freeRoad(),
+    duration: 600,
+    demand: [{ origin: "source", destination: "sink", rate: 7200 }],
+    fleet: defaultVehicleProfiles.map((p) => ({ ...p })),
+  };
+  const demand = generateDemand(s);
+  expect(new Set(demand.map((v) => v.vehicleType)).size).toBe(6);
+  expect(generateDemand(s)).toEqual(demand);
+  const imported = importOsm(
+    { text: JSON.stringify(roundaboutFixture()), metadata: mapMetadata },
+    { bounds: mapBounds, syntheticRate: 1800 },
+  );
+  expect(imported.scenario.fleet).toEqual(defaultVehicleProfiles);
+  expect(imported.provenance.warnings.join(" ")).toContain(
+    "educated assumption",
+  );
+});
+test.each(bodyShapes)(
+  "%s uses finite 3D solids with outward surfaces and bounded visual heights",
+  (shape) => {
+    const faces = vehicleMeshes[shape];
+    expect(faces.length).toBeGreaterThan(10);
+    expect(faces.some((f) => f.normal[2] > 0)).toBe(true);
+    expect(
+      faces.some((f) => Math.abs(f.normal[0]) + Math.abs(f.normal[1]) > 0),
+    ).toBe(true);
+    const z = new Set<number>();
+    for (const face of faces) {
+      expect(Math.hypot(...face.normal)).toBeGreaterThan(0);
+      for (const [x, y, height] of face.points) {
+        expect([x, y, height].every(Number.isFinite)).toBe(true);
+        expect(Math.abs(x)).toBeLessThanOrEqual(0.503);
+        expect(Math.abs(y)).toBeLessThanOrEqual(0.503);
+        expect(height).toBeGreaterThanOrEqual(0);
+        expect(height).toBeLessThanOrEqual(3.2);
+        z.add(height);
+      }
+    }
+    expect(z.size).toBeGreaterThan(3);
+    const before = JSON.stringify(faces);
+    for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5])
+      for (const view of ["iso", "plan"] as const) {
+        const pose = { length: 4, width: 2, angle };
+        const high = projectVehicleSprite(shape, pose, view, "#65538C");
+        const low = projectVehicleSprite(shape, pose, view, "#65538C", false);
+        expect(low.length).toBeGreaterThan(2);
+        expect(high.length).toBeGreaterThan(low.length);
+        expect(high.some((f) => f.pass === 1)).toBe(true);
+        expect(low.every((f) => f.pass !== 1)).toBe(true);
+        expect(low.filter((f) => f.pass === 2).length).toBeGreaterThan(1);
+        expect(high[0].material).toBe("shadow");
+        expect(new Set(low.slice(1).map((f) => f.fill)).size).toBeGreaterThan(
+          1,
+        );
+        high.forEach((f, i) => {
+          expect(f.points.every((p) => p.every(Number.isFinite))).toBe(true);
+          if (i) {
+            expect(f.pass).toBeGreaterThanOrEqual(high[i - 1].pass);
+            if (f.pass === high[i - 1].pass)
+              expect(f.depth).toBeGreaterThanOrEqual(high[i - 1].depth);
+          }
+        });
+        const taller = projectVehicleSprite(
+          shape,
+          { ...pose, heightScale: 2 },
+          view,
+          "#65538C",
+        );
+        if (view === "plan")
+          expect(taller.map((f) => f.points)).toEqual(
+            high.map((f) => f.points),
+          );
+        else
+          expect(
+            Math.min(...taller.flatMap((f) => f.points.map((p) => p[1]))),
+          ).toBeLessThan(
+            Math.min(...high.flatMap((f) => f.points.map((p) => p[1]))),
+          );
+      }
+    expect(JSON.stringify(faces)).toBe(before);
+  },
+);
+test.each([
+  { length: 0 },
+  { width: -1 },
+  { angle: NaN },
+  { heightScale: Infinity },
+  { heightScale: 0 },
+])("invalid sprite pose %j produces no malformed polygons", (patch) => {
+  expect(
+    projectVehicleSprite(
+      "hatchback",
+      { length: 4, width: 2, angle: 0, ...patch },
+      "iso",
+      "#65538C",
+    ),
+  ).toEqual([]);
+});
+test("3D appearance cannot change simulation motion, routes or metrics", () => {
+  const s = {
+    ...freeRoad(),
+    duration: 120,
+    demand: [{ origin: "source", destination: "sink", rate: 600 }],
+    fleet: [{ ...defaultVehicleProfiles[0], share: 100 }],
+  };
+  const a = new Simulation(s),
+    b = new Simulation({
+      ...s,
+      fleet: [{ ...s.fleet[0], bodyShape: "cityBus" }],
+    });
+  while (!a.done) {
+    a.step(30);
+    b.step(30);
+  }
+  expect(a.metrics()).toEqual(b.metrics());
+  for (const [id, v] of a.vehicles) {
+    const other = b.vehicles.get(id)!;
+    expect([other.edge, other.position, other.speed, other.length]).toEqual([
+      v.edge,
+      v.position,
+      v.speed,
+      v.length,
+    ]);
   }
 });

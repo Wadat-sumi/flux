@@ -389,7 +389,7 @@ export function importOsm(
     maxVehicles: 3000,
   };
   warnings.add(
-    "Vehicle profiles use named references and uncalibrated model settings. The initial 100% car mix is synthetic, not a surveyed local fleet.",
+    "Vehicle profiles use named references and uncalibrated model settings. The initial mix (30% cars, 50% two-wheelers, 12% autos, 4% light commercial, 2% buses, 2% trucks) is an educated assumption, not a surveyed local fleet.",
   );
   if (area) {
     // Real OSM geometry can contain sub-metre shape points. Collapse only connected,

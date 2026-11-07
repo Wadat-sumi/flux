@@ -10,11 +10,12 @@ import {
   vehicleLabels,
   vehicleColors,
   vehicleTypeIds,
+  suggestedVehicleShares,
   type VehicleProfile,
   type VehicleTypeId,
 } from "../model/vehicles";
 import references from "../data/vehicle-references.json" with { type: "json" };
-import { vehicleGlyphs } from "./vehicle-shapes";
+import { VehicleSpritePreview } from "./VehicleSpritePreview";
 
 const fields: {
   key: Exclude<
@@ -84,6 +85,7 @@ export function VehiclePanel({
     active?.[0]?.id ?? "car",
   );
   const [resetVersion, setResetVersion] = useState(0);
+  const [mixVersion, setMixVersion] = useState(0);
   const [draft, setDraft] = useState(() =>
     defaultVehicleProfiles.map((p) => {
       const saved = scenario.fleet?.find((f) => f.id === p.id);
@@ -149,7 +151,7 @@ export function VehiclePanel({
           <fieldset className="vehicle-mix">
             <legend>Traffic mix (%)</legend>
             {draft.map((p, i) => (
-              <label key={p.id}>
+              <label key={`${p.id}-${mixVersion}`}>
                 <span>
                   <i
                     className="vehicle-swatch"
@@ -183,6 +185,24 @@ export function VehiclePanel({
             </p>
           </fieldset>
         )}
+        <button
+          className="text-button full"
+          type="button"
+          onClick={() => {
+            setMode("mixed");
+            setDraft((old) =>
+              old.map((p) => ({ ...p, share: suggestedVehicleShares[p.id] })),
+            );
+            setMixVersion((v) => v + 1);
+          }}
+        >
+          Use suggested urban mix
+        </button>
+        <p className="hint">
+          Suggested mix: 50% two-wheelers, 30% cars, 12% autos, 4% light
+          commercial, 2% buses, 2% trucks. Educated assumption; replace with
+          corridor observations when available.
+        </p>
         <label>
           Edit vehicle attributes
           <select
@@ -220,7 +240,7 @@ export function VehiclePanel({
             <p className="hint">
               Braking, gap and headway are uncalibrated model settings. Maximum
               speed is a technical capability, not a legal limit; the road speed
-              also caps motion. Shapes are schematic footprints, not
+              also caps motion. 3D bodies and visual heights are schematic, not
               manufacturer CAD.
             </p>
             <ul>
@@ -267,32 +287,7 @@ export function VehiclePanel({
             ))}
           </select>
         </label>
-        <svg
-          className="vehicle-footprint"
-          viewBox="-9 -1.6 18 3.2"
-          role="img"
-          aria-label={`${vehicleLabels[editing]} footprint preview`}
-        >
-          {vehicleGlyphs[profile.bodyShape ?? defaultBodyShapes[editing]].map(
-            (glyph, i) => (
-              <polygon
-                key={i}
-                points={glyph.points
-                  .map(([x, y]) => `${x * profile.length},${y * profile.width}`)
-                  .join(" ")}
-                fill={
-                  glyph.role === "body"
-                    ? vehicleColors[vehicleTypeIds.indexOf(editing)]
-                    : glyph.role === "tyre"
-                      ? "#51495C"
-                      : glyph.role === "window"
-                        ? "#EEE9F5"
-                        : "#B6ABC8"
-                }
-              />
-            ),
-          )}
-        </svg>
+        <VehicleSpritePreview profile={profile} />
         <div className="vehicle-fields">
           {fields.map((f) => (
             <label key={`${editing}-${f.key}-${resetVersion}`}>

@@ -1,10 +1,10 @@
 # Vehicle types, reference data and traffic mixes
 
-Open **Simulate → Vehicle types & attributes**. Choose one type or **Mixed traffic**, set shares totalling 100%, edit a profile, then **Apply vehicle settings**. Applying starts again at time zero. **Sources & parameter notes** identifies the reference model, market, source links and acceleration category. The footprint preview and moving glyph use the selected schematic body shape. JSON exports, device/server saves, jobs and reports retain the profile. **All metrics → By vehicle type** shows class accounting and available speeds/travel times.
+Open **Simulate → Vehicle types & attributes**. Choose one type or **Mixed traffic**, set shares totalling 100%, edit a profile, then **Apply vehicle settings**. Applying starts again at time zero. **Sources & parameter notes** identifies the reference model, market, source links and acceleration category. The 3D preview and moving sprite use the selected schematic body shape, with shaded solid bodies/cabins, windows, wheels and a ground shadow. JSON exports, device/server saves, jobs and reports retain the profile. **All metrics → By vehicle type** shows class accounting and available speeds/travel times.
 
 ## Reference defaults, revision 2026-11-07-ref1
 
-These are **named representative models, not universal class averages or a calibrated Indian fleet**. Manufacturer specifications supply nominal length, width and technical maximum speed. Export/historical variants are explicitly identified; technical capability is not a legal or governed Indian speed limit. Initial mix is an explicitly synthetic 100% car profile. Real road limits also cap the simulated speed.
+These are **named representative models, not universal class averages or a calibrated Indian fleet**. Manufacturer specifications supply nominal length, width and technical maximum speed. Export/historical variants are explicitly identified; technical capability is not a legal or governed Indian speed limit. New presets and OSM imports start with the assumed mixed fleet described below. Real road limits also cap the simulated speed.
 
 | Type / reference | Length × width (m) | Technical maximum (km/h) | Desired acceleration (m/s²) | Acceleration basis |
 |---|---|---:|---:|---|
@@ -19,9 +19,25 @@ The [Suzuki brochure](https://cdn.suzuki.co.uk/suzuki-gb/svzlmg5n/suzuki-swift-e
 
 Acceleration is the existing IDM model's free-road/desired acceleration parameter, not a guarantee of measured acceleration at every speed, load or grade. Generic car/truck/bus values are initial proxies from [SUMO's parameter references](https://sumo.dlr.de/docs/Vehicle_Type_Parameter_Defaults.html); these depend on the following model and require fitting when transferred to Flux's IDM. Flux still uses its own engine. Raider's `(60/3.6)/5.9` is a derived mean, not peak acceleration or a fitted curve. The auto's 0.6 is an engineering starting assumption informed by [Ramireddy et al. (2021)](https://pp.bme.hu/tr/article/download/16796/9272), Table 1: three-wheeler approach means 0.350–0.552 m/s². The overall observed mean 0.427 must not be mistaken for the IDM parameter or a RE250-specific measurement.
 
-Comfortable braking remains 2 m/s² for all types. Emergency braking is 8 for car/two-wheeler and 7 for the other types. Minimum gaps are 2 / 1 / 1.5 / 2 / 2.5 / 2.5 m; headways are 1.5 / 1 / 1.2 / 1.4 / 1.8 / 1.7 s in table order. These are **uncalibrated model settings**, with [IDM documentation](https://mtreiber.de/MicroApplet/IDM.html) providing parameter context rather than evidence that these exact classes were measured. Shape polygons are original schematic illustrations, not OEM CAD.
+Comfortable braking remains 2 m/s² for all types. Emergency braking is 8 for car/two-wheeler and 7 for the other types. Minimum gaps are 2 / 1 / 1.5 / 2 / 2.5 / 2.5 m; headways are 1.5 / 1 / 1.2 / 1.4 / 1.8 / 1.7 s in table order. These are **uncalibrated model settings**, with [IDM documentation](https://mtreiber.de/MicroApplet/IDM.html) providing parameter context rather than evidence that these exact classes were measured. 3D solids are original schematic illustrations; their heights and trim are visual assumptions rather than OEM CAD or collision geometry.
 
 The machine-readable catalogue is [vehicle-references.json](../src/data/vehicle-references.json). It records source URL, retrieval timestamp, units, SHA-256, reuse-status notes, model/market and derivation. Raw source documents remain in ignored `.tools/research/vehicle-sources`; proprietary brochures/media are not redistributed. All factual defaults and source hashes were checked against retrieved bytes; PDF specification pages were rendered and visually inspected.
+
+## Suggested default traffic mix
+
+The owner's requested educated starting guess is **50% two-wheelers, 30% cars, 12% auto-rickshaws, 4% light commercial, 2% buses and 2% trucks**. These are motor-vehicle arrival probabilities on an urban major-road network. They are **synthetic engineering assumptions**, not a surveyed Bengaluru corridor, an all-India estimate or a calibration result. All OD pairs use the same mix; short seeded runs may vary from these percentages.
+
+Two-wheelers form the largest group, cars the next, with a substantial auto-rickshaw share and smaller commercial/bus/truck shares. This makes a useful exploratory urban mix until matched classified counts replace it. The historical [DULT mobility-plan draft](https://data-opencity.sgp1.cdn.digitaloceanspaces.com/Documents/Recent/Bengaluru-Comprehensive-Mobility-Plan-October-2019-Draft.pdf), PDF page 60/Figure 2-5, provides qualitative context for two-wheeler dominance. Its registered-vehicle stock is different from road traffic flow; no numeric registration percentages were copied into the default split. Exact road-flow shares remain corridor/time dependent. No report records were imported as observed demand.
+
+[traffic-mix.json](../src/data/traffic-mix.json) records the assumed shares, rationale, date/units and context-source URL, license status and SHA-256. The raw PDF remains ignored; its relevant page was rendered and inspected. **Use suggested urban mix** restores only percentages and preserves edited dimensions/driving settings. Applying resets simulation time. Existing saved scenarios retain their mix; loading a new preset uses the suggestion. Legacy files without a fleet retain the original car model until explicitly configured.
+
+| Car | Two-wheeler | Auto-rickshaw |
+|---|---|---|
+| ![Car 3D preview](screenshots/vehicle-3d-car.png) | ![Two-wheeler 3D preview](screenshots/vehicle-3d-twoWheeler.png) | ![Auto-rickshaw 3D preview](screenshots/vehicle-3d-autoRickshaw.png) |
+
+| Light commercial | Bus | Truck |
+|---|---|---|
+| ![Light commercial 3D preview](screenshots/vehicle-3d-lightCommercial.png) | ![Bus 3D preview](screenshots/vehicle-3d-bus.png) | ![Truck 3D preview](screenshots/vehicle-3d-truck.png) |
 
 ## Engine behaviour
 
@@ -31,11 +47,11 @@ Body length determines storage and occupancy. Lane changes use the moving vehicl
 
 Vehicle-aware Dijkstra excludes lanes narrower than the body and segments shorter than `length + minGap`, with a 1e-9 m floating-point tolerance at fit boundaries. It uses a fitting alternative or accounts for a rejected trip. Whole-body storage is required within one edge: a short mapped segment can exclude buses/trucks even where a real vehicle could straddle the junction. Review short segments rather than shrinking real dimensions. Width is a fit check, not a sublane or swept-turn collision model.
 
-Snapshots carry physical length, width, type and body-shape indices. Glyphs rotate along roads; dimensions follow operational-to-drawn path scale, with lane-width/roundabout display caps for legibility. Colours have a text legend. Preview silhouettes stay inside the nominal footprint. Display adjustments do not change numerical dimensions.
+Snapshots carry physical length, width, type and body-shape indices. 3D sprites rotate along roads, cull hidden faces and sort visible faces by camera depth. Wheels are painted beneath closed body panels. Length and width use the same operational-to-drawn scale to retain body proportions, with a lane-width/roundabout cap. Visual heights shrink with the length cap. Isometric view shows volume and directional lighting; plan view projects the same solids from overhead. Small sprites retain 3D body/cabin solids while omitting wheels/trim below their useful pixel size. Colours have a text legend. The nominal body footprint is retained; trim is schematic. Display adjustments do not change numerical dimensions.
 
 ## Compatibility and comparison
 
-New UI presets and OSM imports use the reference fleet. Existing version-1 JSON, device and server saves retain their values. Old explicit profiles without provenance remain custom/earlier values until **Reset selected type defaults** is chosen and applied. A reference revision identifies the starting catalogue; the UI checks actual attributes before saying they match. Custom edits remain editable and travel with the scenario.
+New UI presets and OSM imports use the reference profiles and suggested mixed fleet. Existing version-1 JSON, device and server saves retain their values. Old explicit profiles without provenance remain custom/earlier values until **Reset selected type defaults** is chosen and applied. A reference revision identifies the starting catalogue; the UI checks actual attributes before saying they match. Custom edits remain editable and travel with the scenario.
 
 Optional `fleet` accepts one to six unique known IDs, eight numeric attributes and shares totalling 100%, with optional validated body-shape and reference-revision fields. Unknown fields/types, non-finite values, invalid bounds and emergency braking below comfortable braking are rejected by worker/API validation. Files without `fleet` retain the original variable 4.2–5.4 m car model and original following/speed variation. Applying settings opts into explicit profiles. Older releases may reject the new optional fields.
 
