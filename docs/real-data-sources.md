@@ -41,3 +41,15 @@ The optional backend adapter implements [TomTom Flow Segment Data](https://docs.
 ## Accuracy boundary
 
 [FHWA calibration guidance](https://ops.fhwa.dot.gov/publications/fhwahop16072/mod4.htm) motivates comparing modeled volumes/speeds/travel times against observations. The current Flux passenger-vehicle and simple signal assumptions cannot establish calibrated Indian mixed-traffic accuracy. Road/provider integrations make ingestion and comparisons possible; empirical fitting, richer vehicle classes/phasing and independent validation remain work that requires suitable observations. [SUMO calibration](https://eclipse.dev/sumo/docs/Simulation/Calibrator.html) is a possible future engine path; it has not replaced the custom engine.
+
+
+## Dataset-target follow-up — 7 November 2026
+
+The owner asked to agree on required datasets before selecting them. Provisional preference is one Bengaluru corridor with 2–4 junctions and matched demand/controls/independent validation, with a roundabout option. A fresh search located the DULT CMP report again, including references to CTTS 2015 turning-volume surveys; historical report values are not current observations and PCU totals are not vehicle OD counts. The OpenCity catalogue fetch returned 403 during this follow-up; no fresh license or raw-table access was verified. No data was adopted or ingested.
+
+A new unverified lead, [theTraffic](https://www.thetraffic.in/), describes published Bengaluru signal timing records. Its methodology/research pages returned the same JavaScript shell to the text browser, so controller provenance, dates, usable exports and licensing were not verified. Do not treat its page description as an authoritative signal plan. Follow original source links and verify a matching corridor/time period before recommending adoption. [Caltrans guidance](https://dot.ca.gov/programs/transportation-planning/division-of-transportation-planning/state-planning/statewide-modeling/faq) supports the required input categories; it does not supply Bengaluru observations.
+
+
+### Confirmed corridor target and newly inspected sources
+
+The owner selected a Bengaluru corridor with 2–4 junctions. Direct public CKAN metadata access succeeded after the catalogue page fetch failed: the BTP-labelled timing collection has 124 PDF resources. A Palmgroove/Richmond timing sheet was downloaded, hashed, extracted and visually checked; it contains day/time phase tables and movement diagrams. No license value is supplied and the catalogue upload date does not prove current controller settings. The BMRCL Phase 3 catalogue/summary is a demand-survey lead with baseline PCU totals and later forecasts, not yet a raw matched vehicle OD pack. Detailed review and acquisition priorities: [Bengaluru shortlist](bengaluru-data-shortlist.md). No values were auto-imported.

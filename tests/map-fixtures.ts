@@ -27,7 +27,7 @@ export const mapFixture: {
       type: "way",
       id: 10,
       nodes: [1, 2, 3],
-      tags: { highway: "residential", lanes: "2", maxspeed: "30" },
+      tags: { highway: "primary", lanes: "2", maxspeed: "30" },
     },
   ],
 };

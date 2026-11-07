@@ -3,6 +3,10 @@ import { OsmMap } from "../server/osm-map";
 import { backendFixture, waitForJob } from "./backend-helpers";
 import { mapBounds, mapFixture } from "./map-fixtures";
 import type { ImportedData } from "../src/model/backend";
+import { importOsm } from "../server/imports";
+import { Simulation } from "../src/engine/simulation";
+import { roundaboutFixture } from "./roundabout-fixture";
+import { mapMetadata } from "./map-fixtures";
 
 const input = { bounds: mapBounds, syntheticRate: 900 },
   text = JSON.stringify(mapFixture);
@@ -52,10 +56,10 @@ describe("OSM map service transport and abuse boundaries", () => {
       new Response("{}", {
         headers: {
           "Content-Type": "application/json",
-          "Content-Length": "2000001",
+          "Content-Length": "8000001",
         },
       }),
-      new Response(" ".repeat(2_000_001), {
+      new Response(" ".repeat(8_000_001), {
         headers: { "Content-Type": "application/json" },
       }),
     ]) {
@@ -79,7 +83,7 @@ describe("OSM map service transport and abuse boundaries", () => {
               headers: { "Content-Type": "application/json" },
             }),
         ).area("ip", input),
-      ).rejects.toMatchObject({ status: 422 });
+      ).rejects.toMatchObject({ status: value === "not-json" ? 502 : 422 });
   });
   test("enforces the per-IP quota even on cache hits", async () => {
     const service = new OsmMap(async () => response());
@@ -216,6 +220,49 @@ describe("map selection HTTP integration", () => {
     ).toBe(400);
     expect((await context.request("/api/scenarios", "POST", {})).status).toBe(
       401,
+    );
+  });
+  test("roundabout geometry and group membership persist and execute with server/headless parity", async () => {
+    const imported = importOsm(
+        { text: JSON.stringify(roundaboutFixture()), metadata: mapMetadata },
+        input,
+      ),
+      user = await context.register("roundabout-server@flux.test");
+    const body = {
+      scenario: imported.scenario,
+      provenance: [imported.provenance],
+    };
+    const saved = await context.request<{ id: string }>(
+      "/api/scenarios",
+      "POST",
+      body,
+      user,
+    );
+    expect(saved.status).toBe(201);
+    const loaded = await context.request<{
+      scenario: typeof imported.scenario;
+    }>(`/api/scenarios/${saved.data.id}`, "GET", undefined, user);
+    expect(loaded.data.scenario.roundabouts).toEqual(
+      imported.scenario.roundabouts,
+    );
+    expect(loaded.data.scenario.edges).toEqual(imported.scenario.edges);
+    const job = await context.request<{ id: string }>(
+      "/api/jobs",
+      "POST",
+      body,
+      user,
+    );
+    expect(job.status).toBe(202);
+    const result = await waitForJob(context, job.data.id, user);
+    expect(result.status).toBe("completed");
+    const local = new Simulation(imported.scenario);
+    while (!local.done) local.step(300);
+    expect(result.results![0].metrics.completed).toBe(
+      local.metrics().completed,
+    );
+    expect(result.results![0].metrics.rejected).toBe(local.metrics().rejected);
+    expect(result.input.scenario.roundabouts).toEqual(
+      imported.scenario.roundabouts,
     );
   });
 });

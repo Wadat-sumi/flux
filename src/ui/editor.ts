@@ -5,7 +5,10 @@ import {
   type RoadEdge,
 } from "../model/schema";
 
-export type Selection = { kind: "node" | "edge"; id: string } | null;
+export type Selection = {
+  kind: "node" | "edge" | "roundabout";
+  id: string;
+} | null;
 export function nextId(prefix: string, ids: string[]): string {
   let n = 1;
   const set = new Set(ids);
@@ -62,14 +65,37 @@ export function deleteSelection(
   s: Scenario,
   selection: NonNullable<Selection>,
 ): Scenario {
+  if (selection.kind === "roundabout") {
+    const group = s.roundabouts?.find((r) => r.id === selection.id);
+    if (!group) return s;
+    return parseScenario({
+      ...s,
+      roundabouts: s.roundabouts?.filter((r) => r.id !== group.id),
+      nodes: s.nodes.filter((n) => !group.nodeIds.includes(n.id)),
+      edges: s.edges.filter(
+        (e) => !group.nodeIds.includes(e.from) && !group.nodeIds.includes(e.to),
+      ),
+      demand: s.demand.filter(
+        (d) =>
+          !group.nodeIds.includes(d.origin) &&
+          !group.nodeIds.includes(d.destination),
+      ),
+    });
+  }
   if (selection.kind === "edge")
     return parseScenario({
       ...s,
       edges: s.edges.filter((e) => e.id !== selection.id),
+      roundabouts: s.roundabouts?.filter(
+        (r) => !r.edgeIds.includes(selection.id),
+      ),
     });
   return parseScenario({
     ...s,
     nodes: s.nodes.filter((n) => n.id !== selection.id),
+    roundabouts: s.roundabouts?.filter(
+      (r) => !r.nodeIds.includes(selection.id),
+    ),
     edges: s.edges.filter(
       (e) => e.from !== selection.id && e.to !== selection.id,
     ),

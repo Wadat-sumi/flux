@@ -76,3 +76,13 @@ The six-city data review found public references and Kaggle/Snowflake candidates
 Implemented Map area with six-city shortcuts, interactive/keyboard rectangle selection, live fixed-host OSM geometry, directional clipping and automatic entry sources/exit sinks. Two-way roads use separate terminals; internal dead ends, exact borders/corners, tangencies, disconnected entries, re-entry and layers are covered. Preview markers and synthetic-rate selection feed the existing browser and authenticated server simulations. Main/city/header controls remain accessible on tablet/phone; dense networks avoid repeated layer badges. See map-selection.md for steps, retention and model/provider limits.
 
 Final gate: 288 automated cases pass, including local penetration/security, browser/worker and rendered-performance checks; repeated 120 real authenticated API users produced zero unexpected errors. Public provider availability, sparse-way coverage, actual counts/signal stages, mixed-vehicle calibration and Azure deployment remain explicit limits rather than completed accuracy claims.
+
+
+## Import/structure refinement and resumed delivery — 7 November 2026
+
+Major-road filtering, topology-aware shape compaction before unchanged final graph limits, retained short clipped entries and specific errors address frequent map failures. Simulation and map-marker label controls work without changing traffic/time. Complete tagged roundabouts are first-class editable groups with validated port/arc membership, curved geometry, simplified circulating priority, JSON/server persistence, group edits/delete/undo; partial rings stay ordinary roads. An 800-point geometry and 64-point roundabout regression demonstrate the node-budget reduction without discarding shape.
+
+Latest validation: 320 distinct passing cases, including the new grouped roundabout server/headless parity case; 500+ curved-road render test and repeated 120-authenticated-user load pass. Native live major-road map import is verified. The optional native synthetic-file demonstration was interrupted; its equivalent automated browser edit/export/undo case passed. Other composite types (signals, interchanges, merges/diverges, toll plazas) remain suggestions. Data calibration, richer mixed traffic/phases and the joint Azure review remain pending.
+
+
+Drawing follow-up: reproduced class replacement/tile overflow and pan-on-draw, then fixed static Leaflet container ownership, containment and pointer-based mouse/touch rectangle drawing. Live native drag and generated-road preview verified; final full gate is 323 passing cases plus the repeated 120-user API workload.

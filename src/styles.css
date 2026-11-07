@@ -1,8 +1,7 @@
 @layer reset, theme, components;
 @layer components {
   .map-dialog { width: min(1120px, calc(100vw - 24px)); }
-  .osm-map { height: min(48vh, 440px); min-height: 260px; width: 100%; border-radius: 12px; border: 1px solid var(--line); background: #e9e7e1; z-index: 0; }
-  .osm-map.drawing { cursor: crosshair; }
+  .osm-map { position: relative; overflow: hidden; isolation: isolate; contain: layout paint; height: min(48vh, 440px); min-height: 260px; width: 100%; border-radius: 12px; border: 1px solid var(--line); background: #e9e7e1; z-index: 0; }
   .map-tools, .map-footer { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 12px 0; }
   .map-tools label { min-width: 150px; margin: 0; }
   .map-size { font-size: 12px; color: var(--muted); margin-left: auto; }

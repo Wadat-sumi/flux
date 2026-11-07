@@ -26,3 +26,13 @@ Final local gate: 247 automated cases pass plus the repeated 120-user test after
 
 
 Owner follow-up, 7 November: add interactive OSM area selection, automatic direction-aware boundary sources/sinks and a runnable synthetic starter demand. Implementation and positive/negative/edge, HTTP/security and browser checks completed; final performance evidence is recorded in testing.md. Map geometry does not complete the pending empirical-calibration task.
+
+
+- [x] Fix frequent map failures with major-road filtering, shape compaction before final limits, retained short boundary entries and actionable errors.
+- [x] Add simulation/map annotation toggles without resetting traffic.
+- [x] Persist/edit complete tagged roundabouts as composite groups; retain curved arcs/ports and simplified circulation priority.
+- [x] Test schema/geometry/priority, server save/job parity, browser editing/undo and 500+ curved-road performance; repeat the 120-user API workload. Latest evidence is in testing.md.
+- [x] Agree on the initial data target: Bengaluru corridor with 2–4 junctions.
+- [ ] Select the exact nearby junctions from overlapping source coverage and acquire matched demand, controls and independent validation observations with verified permission and dates. Other structure entity types are suggestions, not completed work.
+
+- [x] Fix map drawing overflow and press-drag panning; verify mouse/touch selection, containment and cancellation before the final tested commit.

@@ -37,6 +37,12 @@ export function EditorPanel(p: Props) {
     p.selection?.kind === "edge"
       ? s.edges.find((e) => e.id === p.selection!.id)
       : undefined;
+  const selectedRoundabout =
+    p.selection?.kind === "roundabout"
+      ? s.roundabouts?.find((r) => r.id === p.selection!.id)
+      : undefined;
+  const groupedNodes = new Set((s.roundabouts ?? []).flatMap((r) => r.nodeIds)),
+    groupedEdges = new Set((s.roundabouts ?? []).flatMap((r) => r.edgeIds));
   const attempt = (fn: () => Scenario) => {
     try {
       p.onChange(fn());
@@ -90,27 +96,112 @@ export function EditorPanel(p: Props) {
           value={p.selection ? `${p.selection.kind}:${p.selection.id}` : ""}
           onChange={(e) => {
             const [kind, id] = e.target.value.split(":");
-            p.onSelect(id ? { kind: kind as "node" | "edge", id } : null);
+            p.onSelect(
+              id ? { kind: kind as "node" | "edge" | "roundabout", id } : null,
+            );
           }}
         >
           <option value="">Choose node or road</option>
+          {(s.roundabouts?.length ?? 0) > 0 && (
+            <optgroup label="Roundabouts">
+              {s.roundabouts!.map((r) => (
+                <option key={r.id} value={`roundabout:${r.id}`}>
+                  {r.id} · {r.nodeIds.length} connections
+                </option>
+              ))}
+            </optgroup>
+          )}
           <optgroup label="Nodes">
-            {s.nodes.map((n) => (
-              <option key={n.id} value={`node:${n.id}`}>
-                {n.id} · L{n.layer} · {n.kind}
-              </option>
-            ))}
+            {s.nodes
+              .filter((n) => !groupedNodes.has(n.id))
+              .map((n) => (
+                <option key={n.id} value={`node:${n.id}`}>
+                  {n.id} · L{n.layer} · {n.kind}
+                </option>
+              ))}
           </optgroup>
           <optgroup label="Roads">
-            {s.edges.map((e) => (
-              <option key={e.id} value={`edge:${e.id}`}>
-                {e.id} · {e.lanes} lane{e.lanes > 1 ? "s" : ""}
-                {e.ramp ? " · ramp" : ""}
-              </option>
-            ))}
+            {s.edges
+              .filter((e) => !groupedEdges.has(e.id))
+              .map((e) => (
+                <option key={e.id} value={`edge:${e.id}`}>
+                  {e.id} · {e.lanes} lane{e.lanes > 1 ? "s" : ""}
+                  {e.ramp ? " · ramp" : ""}
+                </option>
+              ))}
           </optgroup>
         </select>
       </label>
+      {selectedRoundabout && (
+        <form
+          key={
+            JSON.stringify(selectedRoundabout) +
+            JSON.stringify(
+              s.edges.filter((e) => selectedRoundabout.edgeIds.includes(e.id)),
+            )
+          }
+          onSubmit={(event) => {
+            event.preventDefault();
+            const values = new FormData(event.currentTarget);
+            attempt(() =>
+              parseScenario({
+                ...s,
+                edges: s.edges.map((e) =>
+                  selectedRoundabout.edgeIds.includes(e.id)
+                    ? {
+                        ...e,
+                        lanes: Number(values.get("lanes")),
+                        width: Number(values.get("lanes")) * 3.5,
+                        speedLimit: Number(values.get("speed")),
+                      }
+                    : e,
+                ),
+              }),
+            );
+          }}
+        >
+          <h3>Roundabout</h3>
+          <p className="muted small">
+            One grouped structure with {selectedRoundabout.nodeIds.length}{" "}
+            connection ports. Curved circulating arcs retain mapped direction
+            and give circulating vehicles priority. Shape points do not create
+            junction stops.
+          </p>
+          <label>
+            Roundabout lanes
+            <input
+              aria-label="Roundabout lanes"
+              name="lanes"
+              type="number"
+              min="1"
+              max="6"
+              step="1"
+              defaultValue={
+                s.edges.find((e) => e.id === selectedRoundabout.edgeIds[0])!
+                  .lanes
+              }
+              required
+            />
+          </label>
+          <label>
+            Roundabout speed (m/s)
+            <input
+              aria-label="Roundabout speed"
+              name="speed"
+              type="number"
+              min="2"
+              max="45"
+              step="0.01"
+              defaultValue={
+                s.edges.find((e) => e.id === selectedRoundabout.edgeIds[0])!
+                  .speedLimit
+              }
+              required
+            />
+          </label>
+          <button className="primary full">Apply roundabout</button>
+        </form>
+      )}
       {selectedNode && (
         <NodeInspector
           key={JSON.stringify(selectedNode)}
@@ -140,7 +231,12 @@ export function EditorPanel(p: Props) {
             p.onSelect(null);
           }}
         >
-          Delete selected {p.selection.kind === "edge" ? "road" : "node"}
+          Delete selected{" "}
+          {p.selection.kind === "edge"
+            ? "road"
+            : p.selection.kind === "roundabout"
+              ? "roundabout"
+              : "node"}
         </button>
       )}
       <details className="editor-section">

@@ -31,7 +31,7 @@ describe("directed selection boundary conversion", () => {
       size = areaSize(mapBounds);
     expect(scenario.nodes.filter((n) => n.kind === "source")).toHaveLength(2);
     expect(scenario.nodes.filter((n) => n.kind === "sink")).toHaveLength(2);
-    expect(scenario.nodes.filter((n) => n.kind === "junction")).toHaveLength(1);
+    expect(scenario.nodes.filter((n) => n.kind === "junction")).toHaveLength(0);
     for (const n of scenario.nodes) {
       expect(Math.abs(n.x)).toBeLessThanOrEqual(size.width / 2 + 1e-6);
       expect(Math.abs(n.y)).toBeLessThanOrEqual(size.height / 2 + 1e-6);
@@ -48,7 +48,7 @@ describe("directed selection boundary conversion", () => {
       900,
     );
     for (const d of scenario.demand)
-      expect(net.route(d.origin, d.destination)).toHaveLength(2);
+      expect(net.route(d.origin, d.destination)).toHaveLength(1);
     expect(provenance.warnings.some((w) => w.includes("synthetic"))).toBe(true);
   });
   test.each(["yes", "1", "true", "-1"])(
@@ -57,7 +57,7 @@ describe("directed selection boundary conversion", () => {
       const { scenario } = imported(oneWay(direction));
       const source = scenario.nodes.find((n) => n.kind === "source")!,
         sink = scenario.nodes.find((n) => n.kind === "sink")!;
-      expect(scenario.edges).toHaveLength(2);
+      expect(scenario.edges).toHaveLength(1);
       expect(direction === "-1" ? source.x > sink.x : source.x < sink.x).toBe(
         true,
       );
@@ -132,7 +132,14 @@ describe("directed selection boundary conversion", () => {
     const { scenario } = imported(fixture);
     expect(
       scenario.nodes.filter((n) => n.id.startsWith("osm_2_")),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
+    const lowSource = scenario.nodes.find(
+        (n) => n.kind === "source" && n.layer === 0,
+      )!,
+      highSink = scenario.nodes.find(
+        (n) => n.kind === "sink" && n.layer === 1,
+      )!;
+    expect(new Network(scenario).route(lowSource.id, highSink.id)).toBeNull();
     expect(
       scenario.edges.every((e) => {
         const a = scenario.nodes.find((n) => n.id === e.from)!,
@@ -150,7 +157,7 @@ describe("directed selection boundary conversion", () => {
     expect(provenance.warnings.some((w) => w.includes("sub-metre"))).toBe(true);
     for (const d of scenario.demand)
       expect(new Network(scenario).route(d.origin, d.destination)).toHaveLength(
-        2,
+        1,
       );
   });
   test("zero synthetic traffic is valid and map coordinates round-trip", () => {
@@ -173,7 +180,7 @@ describe("directed selection boundary conversion", () => {
       net = new Network(scenario);
     expect(scenario.demand).toHaveLength(2);
     for (const demand of scenario.demand)
-      expect(net.route(demand.origin, demand.destination)).toHaveLength(2);
+      expect(net.route(demand.origin, demand.destination)).toHaveLength(1);
     expect(
       net.route(scenario.demand[0].origin, scenario.demand[1].destination),
     ).toBeNull();

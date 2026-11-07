@@ -2,17 +2,22 @@ import { expect, test } from "@playwright/test";
 import { freeRoad, intersection } from "../../src/scenarios/presets";
 import { mkdirSync, writeFileSync } from "node:fs";
 
-for (const topology of ["corridor", "signal"] as const)
+for (const topology of ["corridor", "signal", "curved"] as const)
   test(`500+ live agents keep ${topology} rendering smooth and simulation near 30 Hz`, async ({
     page,
   }) => {
     test.setTimeout(60000);
     await page.goto("/");
-    const s = topology === "corridor" ? freeRoad() : intersection();
+    const s = topology === "signal" ? intersection() : freeRoad();
     s.duration = 600;
-    if (topology === "corridor") {
+    if (topology !== "signal") {
       s.edges[0].lanes = 6;
       s.edges[0].width = 21;
+      if (topology === "curved")
+        s.edges[0].shape = Array.from({ length: 64 }, (_, i) => ({
+          x: ((i + 1) * 5000) / 65,
+          y: 200 * Math.sin(((i + 1) * Math.PI * 2) / 65),
+        }));
     } else {
       s.nodes = s.nodes.map((n) => ({ ...n, x: n.x * 4, y: n.y * 4 }));
       s.edges = s.edges.map((e) => ({
@@ -36,7 +41,7 @@ for (const topology of ["corridor", "signal"] as const)
     const canvas = page.locator("canvas");
     // The signal network feeds vehicles from rest; warm until 500+ are on roads,
     // keeping external spawn queues out of the population measurement.
-    const warmup = topology === 'signal' ? 20 : 15;
+    const warmup = topology === "signal" ? 20 : 15;
     for (let i = 0; i < warmup; i++) {
       await page
         .getByRole("button", { name: "Advance 20 seconds", exact: true })
@@ -91,7 +96,9 @@ for (const topology of ["corridor", "signal"] as const)
     writeFileSync(
       topology === "corridor"
         ? "docs/benchmarks/browser.json"
-        : "docs/benchmarks/browser-signal.json",
+        : topology === "signal"
+          ? "docs/benchmarks/browser-signal.json"
+          : "docs/benchmarks/browser-curved.json",
       JSON.stringify(report, null, 2) + "\n",
     );
     expect(measurement.rafFps).toBeGreaterThanOrEqual(50);

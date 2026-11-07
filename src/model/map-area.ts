@@ -5,6 +5,7 @@ import {
   type RoadNode,
   type Scenario,
 } from "./schema";
+import { compactRoads, groupRoundabouts } from "./compact-roads";
 
 const coordinate = z.number().finite();
 export const boundsSchema = z
@@ -61,7 +62,13 @@ export function unprojectPoint(
   ];
 }
 /** Liang–Barsky clipping of a directed road. Boundary-only/tangent segments carry no inside flow. */
-function clip(a: RoadNode, b: RoadNode, width: number, height: number) {
+export function clipSegment(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  width: number,
+  height: number,
+  minimumLength = 1,
+) {
   const dx = b.x - a.x,
     dy = b.y - a.y;
   let start = 0,
@@ -77,7 +84,8 @@ function clip(a: RoadNode, b: RoadNode, width: number, height: number) {
     } else if (p < 0) start = Math.max(start, q / p);
     else end = Math.min(end, q / p);
   }
-  if (end <= start || Math.hypot(dx, dy) * (end - start) < 1) return null;
+  if (end <= start || Math.hypot(dx, dy) * (end - start) < minimumLength)
+    return null;
   const point = (t: number) => ({ x: a.x + dx * t, y: a.y + dy * t });
   const mid = point((start + end) / 2);
   if (
@@ -91,6 +99,7 @@ export function clipMapRoads(
   raw: Scenario,
   bounds: MapBounds,
   syntheticRate: number,
+  context: { roundaboutEdges?: Set<string>; protectedNodes?: Set<string> } = {},
 ): Scenario {
   const { width, height } = areaSize(bounds),
     originals = new Map(raw.nodes.map((n) => [n.id, n]));
@@ -102,7 +111,9 @@ export function clipMapRoads(
   for (const edge of raw.edges) {
     const a = originals.get(edge.from)!,
       b = originals.get(edge.to)!;
-    const part = clip(a, b, width, height);
+    // Keep short boundary pieces until compaction; dropping them here can erase
+    // the only entry/exit of a densely sampled road.
+    const part = clipSegment(a, b, width, height, 0.000001);
     if (!part) continue;
     const endpoint = (
       n: RoadNode,
@@ -126,20 +137,48 @@ export function clipMapRoads(
       ),
     });
   }
+  const compact = compactRoads(
+    { ...raw, nodes: [...nodes.values()], edges },
+    context.roundaboutEdges,
+    context.protectedNodes,
+  );
+  if (
+    compact.scenario.nodes.length > 300 ||
+    compact.scenario.edges.length > 1000
+  )
+    throw new Error(
+      `After simplifying road shapes, this selection still has ${compact.scenario.nodes.length} junctions/terminals and ${compact.scenario.edges.length} roads (limits 300/1,000). Choose a smaller major-road corridor.`,
+    );
+  const roundabouts = groupRoundabouts(
+    compact.scenario,
+    compact.roundaboutEdges,
+  );
+  const compactNodes = new Map(compact.scenario.nodes.map((n) => [n.id, n]));
+  if (
+    compact.scenario.edges.some((e) => {
+      const a = compactNodes.get(e.from)!,
+        b = compactNodes.get(e.to)!;
+      return Math.hypot(a.x - b.x, a.y - b.y) < 1;
+    })
+  )
+    throw new Error(
+      "The selection boundary lies within one metre of a real road connection. Move the rectangle edge a few metres and preview again.",
+    );
   const scenario = parseScenario({
     ...raw,
     name: "OpenStreetMap selected area",
-    nodes: [...nodes.values()],
-    edges,
+    nodes: compact.scenario.nodes,
+    edges: compact.scenario.edges,
+    ...(roundabouts.length ? { roundabouts } : {}),
     demand: [],
     description: `© OpenStreetMap contributors — ODbL. Selected bounds S/W/N/E: ${bounds.south},${bounds.west},${bounds.north},${bounds.east}. Automatic directed boundary terminals. Synthetic total demand ${syntheticRate} vehicles/hour; no observed counts or signal timings.`,
   });
   if (!edges.length)
     throw new Error(
-      "No drivable roads inside this selection; select an area across road junctions",
+      "No major motor roads cross this selection. Move it over a primary, secondary or tertiary road; residential streets, alleys and paths are excluded.",
     );
   const outgoing = new Map<string, string[]>();
-  for (const e of edges)
+  for (const e of scenario.edges)
     outgoing.set(e.from, [...(outgoing.get(e.from) ?? []), e.to]);
   const sources = scenario.nodes.filter((n) => n.kind === "source"),
     sinks = scenario.nodes.filter((n) => n.kind === "sink");
@@ -165,7 +204,7 @@ export function clipMapRoads(
   }
   if (!pairs.length)
     throw new Error(
-      "No directed entry-to-exit route crosses this selection. Expand or move the boundary across connected roads",
+      "Major roads are present, but no directed entry-to-exit route crosses the boundary. Expand or move the rectangle so a connected road enters and leaves it. A fully enclosed roundabout needs its approach roads included.",
     );
   if (pairs.length > 100)
     throw new Error(

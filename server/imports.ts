@@ -12,6 +12,8 @@ import { Network } from "../src/engine/network";
 import {
   clipMapRoads,
   projectPoint,
+  clipSegment,
+  areaSize,
   type MapBounds,
 } from "../src/model/map-area";
 
@@ -48,14 +50,14 @@ const osmSchema = z.object({
         z.object({
           type: z.literal("way"),
           id: osmId,
-          nodes: z.array(osmId).min(2).max(500),
+          nodes: z.array(osmId).min(2).max(5000),
           tags,
         }),
         z.object({ type: z.literal("relation"), id: osmId, tags }),
       ]),
     )
     .min(1)
-    .max(3000),
+    .max(20000),
 });
 const defaults: Record<string, number> = {
   motorway: 90,
@@ -90,10 +92,20 @@ export function importOsm(
   input: unknown,
   area?: { bounds: MapBounds; syntheticRate: number },
 ): ImportedData {
-  const { text, metadata: meta } = osmInputSchema.parse(input);
-  if (Buffer.byteLength(text) > 2_000_000)
-    throw new Error("OSM file exceeds 2 MB");
+  const { text, metadata: meta } = (
+    area
+      ? osmInputSchema.extend({ text: z.string().min(1).max(8_000_000) })
+      : osmInputSchema
+  ).parse(input);
+  if (Buffer.byteLength(text) > (area ? 8_000_000 : 2_000_000))
+    throw new Error(
+      area ? "OSM map extract exceeds 8 MB" : "OSM file exceeds 2 MB",
+    );
   const raw = osmSchema.parse(JSON.parse(text));
+  if (!area && raw.elements.length > 3000)
+    throw new Error(
+      "OSM file exceeds 3,000 elements; select a smaller extract",
+    );
   const warnings = new Set<string>([
     "OSM geometry is observed map data; no traffic demand is inferred. Import OD observations or configure synthetic demand separately.",
     "Turn restrictions, detailed signal timing and junction turning geometry require manual review.",
@@ -104,19 +116,91 @@ export function importOsm(
   if (points.size !== raw.elements.filter((e) => e.type === "node").length)
     throw new Error("Duplicate OSM node IDs");
   const wayIds = new Set<number>();
-  const ways = raw.elements
+  let ways = raw.elements
     .filter((e) => e.type === "way")
     .filter(
       (e) =>
         Object.hasOwn(defaults, e.tags.highway) &&
         !["private", "no"].includes(e.tags.access ?? "") &&
-        !["private", "no"].includes(e.tags.motor_vehicle ?? ""),
+        !["private", "no"].includes(e.tags.motor_vehicle ?? "") &&
+        !["private", "no"].includes(e.tags.motorcar ?? "") &&
+        !["private", "no"].includes(e.tags.vehicle ?? "") &&
+        e.tags.area !== "yes",
     );
+  if (area) {
+    const major = new Set([
+      "motorway",
+      "motorway_link",
+      "trunk",
+      "trunk_link",
+      "primary",
+      "primary_link",
+      "secondary",
+      "secondary_link",
+      "tertiary",
+      "tertiary_link",
+    ]);
+    const selected = new Set(
+      ways.filter((w) => major.has(w.tags.highway)).map((w) => w.id),
+    );
+    const connected = new Set(
+      ways.filter((w) => selected.has(w.id)).flatMap((w) => w.nodes),
+    );
+    // Keep circulating arcs connected to major roads even if their own highway class is inconsistent.
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const w of ways)
+        if (
+          w.tags.junction === "roundabout" &&
+          !selected.has(w.id) &&
+          w.nodes.some((id) => connected.has(id))
+        ) {
+          selected.add(w.id);
+          w.nodes.forEach((id) => connected.add(id));
+          changed = true;
+        }
+    }
+    const size = areaSize(area.bounds);
+    ways = ways
+      .filter((w) => selected.has(w.id))
+      .filter((w) => {
+        for (let i = 1; i < w.nodes.length; i++) {
+          const a = points.get(w.nodes[i - 1]),
+            b = points.get(w.nodes[i]);
+          if (!a || !b)
+            throw new Error(
+              "OSM road is missing dependent nodes; retry the map request",
+            );
+          if (
+            clipSegment(
+              projectPoint(a.lat, a.lon, area.bounds),
+              projectPoint(b.lat, b.lon, area.bounds),
+              size.width,
+              size.height,
+              0.000001,
+            )
+          )
+            return true;
+        }
+        return false;
+      });
+    warnings.add(
+      "Only major motor roads (motorway/trunk/primary/secondary/tertiary and their links) are imported. Connected roundabout arcs are retained. Residential/service roads, alleys, cycleways and walkways are excluded.",
+    );
+    warnings.add(
+      "Geometry-only points are stored as curved road shape, not simulation junctions. True connections, controls, boundaries and road-attribute changes are preserved.",
+    );
+  }
   if (!ways.length)
     throw new Error(
-      "No supported public motor roads; export OSM ways and their nodes",
+      area
+        ? "No major motor roads found in this selection. Move the rectangle over primary, secondary or tertiary roads; local streets and paths are excluded."
+        : "No supported public motor roads; export OSM ways and their nodes",
     );
-  if (ways.reduce((sum, way) => sum + way.nodes.length - 1, 0) > 1000)
+  if (
+    ways.reduce((sum, way) => sum + way.nodes.length - 1, 0) >
+    (area ? 20000 : 1000)
+  )
     throw new Error(
       "OSM extract exceeds the bounded segment budget; select a smaller corridor",
     );
@@ -158,6 +242,8 @@ export function importOsm(
     referenced.reduce((sum, n) => sum + n.lon, 0) / referenced.length;
   const nodes = new Map<string, RoadNode>(),
     edges: RoadEdge[] = [];
+  const roundaboutEdges = new Set<string>(),
+    protectedNodes = new Set<string>();
   for (const way of ways) {
     if (wayIds.has(way.id)) throw new Error("Duplicate OSM way IDs");
     wayIds.add(way.id);
@@ -234,10 +320,12 @@ export function importOsm(
         kind: "junction",
         control: "priority",
       });
-      if (n.tags.highway === "traffic_signals")
+      if (n.tags.highway === "traffic_signals") {
+        protectedNodes.add(key);
         warnings.add(
           "Mapped traffic signals use priority until timing is configured in the editor.",
         );
+      }
     }
     for (let i = 1; i < way.nodes.length; i++) {
       const a = nodes.get(`osm_${way.nodes[i - 1]}_l${layer}`)!,
@@ -266,13 +354,23 @@ export function importOsm(
         lanes,
         width: lanes * 3.5,
         speedLimit: kmh / 3.6,
-        priority: ["motorway", "trunk", "primary"].includes(way.tags.highway)
-          ? 3
-          : 1,
+        priority:
+          way.tags.junction === "roundabout"
+            ? 8
+            : ["motorway", "trunk", "primary"].includes(way.tags.highway)
+              ? 3
+              : 1,
       });
-      if (direction !== -1) edges.push(road(a.id, b.id, forward, "f"));
-      if (direction !== 1)
-        edges.push(road(b.id, a.id, direction === -1 ? total : backward, "b"));
+      if (direction !== -1) {
+        const edge = road(a.id, b.id, forward, "f");
+        edges.push(edge);
+        if (way.tags.junction === "roundabout") roundaboutEdges.add(edge.id);
+      }
+      if (direction !== 1) {
+        const edge = road(b.id, a.id, direction === -1 ? total : backward, "b");
+        edges.push(edge);
+        if (way.tags.junction === "roundabout") roundaboutEdges.add(edge.id);
+      }
     }
   }
   const rawScenario: Scenario = {
@@ -303,7 +401,13 @@ export function importOsm(
       if (Math.hypot(a.x - b.x, a.y - b.y) < 1) {
         const from = root(e.from),
           to = root(e.to);
-        if (from !== to) parent.set(to, from);
+        const fromPoint = nodes.get(from)!,
+          toPoint = nodes.get(to)!;
+        if (
+          from !== to &&
+          Math.hypot(fromPoint.x - toPoint.x, fromPoint.y - toPoint.y) < 1
+        )
+          parent.set(to, from);
       }
     }
     if (parent.size) {
@@ -317,7 +421,12 @@ export function importOsm(
         .map((e) => ({ ...e, from: root(e.from), to: root(e.to) }))
         .filter((e) => e.from !== e.to);
     }
-    const scenario = clipMapRoads(rawScenario, area.bounds, area.syntheticRate);
+    const scenario = clipMapRoads(
+      rawScenario,
+      area.bounds,
+      area.syntheticRate,
+      { roundaboutEdges, protectedNodes },
+    );
     warnings.delete(
       "OSM geometry is observed map data; no traffic demand is inferred. Import OD observations or configure synthetic demand separately.",
     );
@@ -333,7 +442,7 @@ export function importOsm(
     return {
       scenario,
       provenance: provenance("osm", text, meta, warnings),
-      summary: `${scenario.nodes.length} nodes, ${scenario.edges.length} directed roads; ${scenario.nodes.filter((n) => n.kind === "source").length} sources and ${scenario.nodes.filter((n) => n.kind === "sink").length} sinks on the boundary. Synthetic demand: ${area.syntheticRate} vehicles/hour.`,
+      summary: `${scenario.nodes.length} nodes, ${scenario.edges.length} directed roads, ${scenario.roundabouts?.length ?? 0} roundabouts; ${scenario.nodes.filter((n) => n.kind === "source").length} sources and ${scenario.nodes.filter((n) => n.kind === "sink").length} sinks on the boundary. Synthetic demand: ${area.syntheticRate} vehicles/hour.`,
     };
   }
   const scenario = parseScenario(rawScenario);

@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { mapAreaSchema } from "../src/model/map-area";
 import { importOsm } from "./imports";
 import { HttpError, RateLimiter } from "./security";
@@ -51,11 +52,11 @@ export class OsmMap {
           await response.body?.cancel();
           throw new Error("upstream");
         }
-        if (Number(response.headers.get("content-length") ?? 0) > 2_000_000) {
+        if (Number(response.headers.get("content-length") ?? 0) > 8_000_000) {
           await response.body?.cancel();
           throw new HttpError(
             413,
-            "Map extract exceeds 2 MB; select a smaller area",
+            "Map extract exceeds 8 MB; select a smaller area",
           );
         }
         if (!response.body) throw new Error("upstream");
@@ -67,10 +68,10 @@ export class OsmMap {
             const { done, value } = await reader.read();
             if (done) break;
             bytes += value.byteLength;
-            if (bytes > 2_000_000)
+            if (bytes > 8_000_000)
               throw new HttpError(
                 413,
-                "Map extract exceeds 2 MB; select a smaller area",
+                "Map extract exceeds 8 MB; select a smaller area",
               );
             chunks.push(value);
           }
@@ -107,10 +108,22 @@ export class OsmMap {
         },
         area,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof SyntaxError)
+        throw new HttpError(
+          502,
+          "OpenStreetMap returned invalid JSON. Retry shortly or import a complete OSM file.",
+        );
+      if (error instanceof ZodError)
+        throw new HttpError(
+          422,
+          "OSM contains unsupported road attributes or excessive geometry. Try another corridor or review the OSM file; this is a data validation issue, not necessarily a large selection.",
+        );
       throw new HttpError(
         422,
-        "This area has no usable boundary route or exceeds the 300-node/1,000-road import limits. Move or shrink the selection; avoid a boundary through a dense junction",
+        error instanceof Error
+          ? error.message.slice(0, 400)
+          : "Map conversion failed; retry another corridor",
       );
     }
   }

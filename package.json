@@ -15,7 +15,7 @@
     "build": "tsc --noEmit && vite build && npm run build:server",
     "benchmark": "node --import tsx scripts/benchmark.ts",
     "check": "npm run typecheck && npm run lint && npm test",
-    "test:unit": "vitest run tests/engine.test.ts tests/boundaries.test.ts tests/ui-model.test.ts tests/feature-audit.test.ts tests/map-area.test.ts",
+    "test:unit": "vitest run tests/engine.test.ts tests/boundaries.test.ts tests/ui-model.test.ts tests/feature-audit.test.ts tests/map-area.test.ts tests/road-structures.test.ts",
     "test:integration": "vitest run tests/integration.test.ts tests/worker.test.ts tests/backend.test.ts tests/backend-database.test.ts tests/backend-map.test.ts",
     "test:performance": "vitest run tests/performance.test.ts",
     "test:security": "vitest run tests/security.test.ts tests/backend-security.test.ts tests/backend-secrets.test.ts tests/backend-map.test.ts",

@@ -1,6 +1,6 @@
 # Flux methodology
 
-All quantities are SI internally: length in metres, time in seconds, speed in m/s. Demand rates are vehicles/hour. Screen coordinates represent metres; an edge's operational length is independently editable, so straight screen geometry is illustrative.
+All quantities are SI internally: length in metres, time in seconds, speed in m/s. Demand rates are vehicles/hour. Screen coordinates represent local metres. Roads may have bounded polyline shape; map compaction preserves curve length and removes geometry-only junction stops. Operational length remains independently editable, so schematic geometry does not by itself validate travel time.
 
 ## Demand and accounting
 
@@ -55,3 +55,8 @@ Time-series samples are numerical observations from the worker. Paired throughpu
 ## Missing observations
 
 The numerical core uses finite zero sentinels before any trip has completed. Presentation must not treat those sentinels as measured zero-duration trips: the UI shows an em dash and omits travel-time samples until completed > 0. Exported experiment reports use null for unavailable completed-trip averages and mean speed when no on-road vehicle exists. Actual measured zeros remain numeric zero. Missing history samples keep their original time positions, rather than shifting the first completed observation to time zero.
+
+
+## Composite roundabouts and curved geometry
+
+Complete tagged OSM roundabouts are grouped over retained ports and curved circulating arcs. Routing uses operational arc length/free-flow speed; snapshots and Canvas place agents along geometric arc length. Degree-two shape points do not reserve a junction. Real ports retain exclusive node transfer and downstream clearance. Entering vehicles yield while a circulating approach has a vehicle within max(8 metres, 3 seconds × current speed). These explicit approximate rules require observed headways, entry flows and independent queues/travel times for calibration; multilane weaving and mixed vehicle classes remain simplified. Partial rings stay ordinary roads.

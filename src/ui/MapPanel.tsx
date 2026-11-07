@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { cities, type CityId } from "../model/cities";
+import { cities as cityRegions, type CityId } from "../model/cities";
 import {
   areaSize,
   boundsSchema,
@@ -10,6 +15,11 @@ import {
 } from "../model/map-area";
 import type { ImportedData } from "../model/backend";
 import { api } from "./api";
+import { roadPoints } from "../model/road-geometry";
+
+const cities = cityRegions.map((c) =>
+  c.id === "bengaluru" ? { ...c, latitude: 12.9745, longitude: 77.5964 } : c,
+);
 
 function around(lat: number, lon: number): MapBounds {
   const halfLat = 130 / 111194.9266,
@@ -37,8 +47,14 @@ export function MapPanel({
     map = useRef<L.Map | null>(null),
     rectangle = useRef<L.Rectangle | null>(null),
     roads = useRef<L.LayerGroup | null>(null);
-  const draw = useRef(false),
-    first = useRef<L.LatLng | null>(null),
+  const first = useRef<L.LatLng | null>(null),
+    gesture = useRef<{
+      pointerId: number;
+      start: L.LatLng;
+      downX: number;
+      downY: number;
+      moved: boolean;
+    } | null>(null),
     alive = useRef(true);
   const [city, setCity] = useState<CityId>("bengaluru"),
     [bounds, setBounds] = useState(
@@ -46,12 +62,13 @@ export function MapPanel({
     );
   const [drawing, setDrawing] = useState(false),
     [rate, setRate] = useState(900),
+    [labels, setLabels] = useState(true),
     [busy, setBusy] = useState(false),
     [result, setResult] = useState<ImportedData | null>(null),
     [error, setError] = useState(""),
     [tileError, setTileError] = useState(false),
     [message, setMessage] = useState(
-      "Pan and zoom, then draw a rectangle across the roads you want to simulate.",
+      "Pan and zoom, then choose Draw selection and press-drag a rectangle across the roads you want to simulate.",
     );
   useEffect(() => {
     alive.current = true;
@@ -79,38 +96,6 @@ export function MapPanel({
       { color: "#7763ac", weight: 2, fillOpacity: 0.1, interactive: false },
     ).addTo(view);
     roads.current = L.layerGroup().addTo(view);
-    view.on("click", (e: L.LeafletMouseEvent) => {
-      if (!draw.current) return;
-      if (!first.current) {
-        first.current = e.latlng;
-        setMessage("Choose the opposite corner of the simulation area.");
-        return;
-      }
-      const a = first.current,
-        b = e.latlng;
-      const selected = {
-        south: Math.min(a.lat, b.lat),
-        north: Math.max(a.lat, b.lat),
-        west: Math.min(a.lng, b.lng),
-        east: Math.max(a.lng, b.lng),
-      };
-      const parsed = boundsSchema.safeParse(selected);
-      if (!parsed.success) {
-        setError(parsed.error.issues[0].message);
-        first.current = null;
-        setMessage("Choose the first corner again (50–800 m per side).");
-        return;
-      }
-      setBounds(parsed.data);
-      setResult(null);
-      setError("");
-      setDrawing(false);
-      draw.current = false;
-      first.current = null;
-      setMessage(
-        "Selection ready. Preview roads to detect boundary sources and sinks.",
-      );
-    });
     const resize = new ResizeObserver(() => view.invalidateSize());
     resize.observe(container.current!);
     return () => {
@@ -121,19 +106,32 @@ export function MapPanel({
     };
   }, []);
   useEffect(() => {
+    const view = map.current;
+    if (!view) return;
+    for (const handler of [
+      view.dragging,
+      view.touchZoom,
+      view.doubleClickZoom,
+      view.scrollWheelZoom,
+    ])
+      if (drawing) handler.disable();
+      else handler.enable();
+  }, [drawing]);
+  useEffect(() => {
     rectangle.current?.setBounds(leafletBounds(bounds));
     roads.current?.clearLayers();
   }, [bounds]);
   useEffect(() => {
     const layers = roads.current;
-    if (!layers || !result) return;
+    if (!layers) return;
     layers.clearLayers();
+    if (!result || drawing) return;
     const nodes = new Map(result.scenario.nodes.map((n) => [n.id, n]));
     for (const edge of result.scenario.edges) {
       const a = nodes.get(edge.from)!,
         b = nodes.get(edge.to)!;
       L.polyline(
-        [unprojectPoint(a.x, a.y, bounds), unprojectPoint(b.x, b.y, bounds)],
+        roadPoints(edge, a, b).map((n) => unprojectPoint(n.x, n.y, bounds)),
         { color: "#66528f", weight: 4, opacity: 0.8 },
       ).addTo(layers);
     }
@@ -148,23 +146,128 @@ export function MapPanel({
           weight: 2,
         })
           .bindTooltip(source ? "SOURCE →" : "→ SINK", {
-            permanent: true,
+            permanent: labels,
             direction: source ? "left" : "right",
             offset: source ? [-8, -8] : [8, 8],
           })
           .addTo(layers);
       }
-  }, [result, bounds]);
+  }, [result, bounds, labels, drawing]);
   function select(next: MapBounds) {
+    releaseGesture();
     setBounds(next);
     setResult(null);
     setError("");
-    draw.current = false;
     first.current = null;
     setDrawing(false);
     setMessage(
       "Selection ready. Preview roads to detect boundary sources and sinks.",
     );
+  }
+  function releaseGesture() {
+    const g = gesture.current;
+    gesture.current = null;
+    if (g && container.current?.hasPointerCapture(g.pointerId))
+      container.current.releasePointerCapture(g.pointerId);
+  }
+  function cancelDrawing() {
+    releaseGesture();
+    first.current = null;
+    setDrawing(false);
+    setError("");
+    rectangle.current
+      ?.setBounds(leafletBounds(bounds))
+      .setStyle({ color: "#7763ac" });
+    setMessage("Selection drawing cancelled.");
+  }
+  function pointerLocation(event: ReactPointerEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return map.current!.containerPointToLatLng(
+      L.point(
+        Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+        Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+      ),
+    );
+  }
+  function selectionBounds(a: L.LatLng, b: L.LatLng): MapBounds {
+    return {
+      south: Math.min(a.lat, b.lat),
+      north: Math.max(a.lat, b.lat),
+      west: Math.min(a.lng, b.lng),
+      east: Math.max(a.lng, b.lng),
+    };
+  }
+  function finishSelection(a: L.LatLng, b: L.LatLng) {
+    const parsed = boundsSchema.safeParse(selectionBounds(a, b));
+    first.current = null;
+    if (!parsed.success) {
+      setError(parsed.error.issues[0].message);
+      rectangle.current
+        ?.setBounds(leafletBounds(bounds))
+        .setStyle({ color: "#7763ac" });
+      setMessage(
+        "Drag a rectangle again, or choose two corners (50–800 m per side).",
+      );
+      return;
+    }
+    select(parsed.data);
+    rectangle.current?.setStyle({ color: "#7763ac" });
+  }
+  function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (
+      !drawing ||
+      event.button !== 0 ||
+      !event.isPrimary ||
+      gesture.current ||
+      (event.target as Element).closest(".leaflet-control")
+    )
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    gesture.current = {
+      pointerId: event.pointerId,
+      start: first.current ?? pointerLocation(event),
+      downX: event.clientX,
+      downY: event.clientY,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setError("");
+  }
+  function pointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!drawing) return;
+    const g = gesture.current;
+    if (g && g.pointerId !== event.pointerId) return;
+    const start = g?.start ?? first.current;
+    if (!start) return;
+    if (g && Math.hypot(event.clientX - g.downX, event.clientY - g.downY) > 4)
+      g.moved = true;
+    if (g && !g.moved && !first.current) return;
+    event.preventDefault();
+    const next = selectionBounds(start, pointerLocation(event)),
+      size = areaSize(next),
+      valid = boundsSchema.safeParse(next).success;
+    rectangle.current
+      ?.setBounds(leafletBounds(next))
+      .setStyle({ color: valid ? "#7763ac" : "#bb633c" });
+    setMessage(
+      `${Math.round(size.width)} × ${Math.round(size.height)} m — release to select, or click the opposite corner.`,
+    );
+  }
+  function pointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const g = gesture.current;
+    if (!drawing || !g || g.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const end = pointerLocation(event);
+    releaseGesture();
+    if (g.moved || first.current) finishSelection(g.start, end);
+    else {
+      first.current = g.start;
+      setMessage(
+        "First corner set. Click the opposite corner or drag to size the selection.",
+      );
+    }
   }
   const size = areaSize(bounds);
   return (
@@ -172,7 +275,12 @@ export function MapPanel({
       ref={dialog}
       className="server-dialog map-dialog"
       aria-label="OpenStreetMap area selection"
-      onCancel={onClose}
+      onCancel={(event) => {
+        if (drawing) {
+          event.preventDefault();
+          cancelDrawing();
+        } else onClose();
+      }}
     >
       <div className="results-title">
         <div>
@@ -184,10 +292,12 @@ export function MapPanel({
         </button>
       </div>
       <p>
-        Choose a small road section. Flux clips roads to its boundary and
-        automatically marks <strong className="source-key">sources (in)</strong>{" "}
-        and <strong className="sink-key">sinks (out)</strong> using road
-        direction.
+        Major roads only: motorways, trunk, primary, secondary and tertiary
+        roads, plus their links and connected roundabouts. Local streets,
+        alleys, cycleways and walkways are excluded. Flux clips roads to its
+        boundary and automatically marks{" "}
+        <strong className="source-key">sources (in)</strong> and{" "}
+        <strong className="sink-key">sinks (out)</strong> using road direction.
       </p>
       <div className="map-tools">
         <label>
@@ -216,13 +326,16 @@ export function MapPanel({
           disabled={busy}
           aria-pressed={drawing}
           onClick={() => {
-            draw.current = !drawing;
+            if (drawing) {
+              cancelDrawing();
+              return;
+            }
             first.current = null;
-            setDrawing(!drawing);
+            releaseGesture();
+            setDrawing(true);
+            setError("");
             setMessage(
-              drawing
-                ? "Selection drawing cancelled."
-                : "Click or tap the first corner, then the opposite corner. Drag to pan.",
+              "Press and drag to draw a rectangle, or click two opposite corners. Panning is paused while drawing.",
             );
           }}
         >
@@ -238,13 +351,36 @@ export function MapPanel({
         >
           Select 260 m at map centre
         </button>
+        <button
+          className="secondary"
+          aria-pressed={!labels}
+          onClick={() => setLabels(!labels)}
+        >
+          {labels ? "Hide map labels" : "Show map labels"}
+        </button>
         <span className="map-size" aria-live="polite">
           {Math.round(size.width)} × {Math.round(size.height)} m selected
         </span>
       </div>
       <div
         ref={container}
-        className={`osm-map${drawing ? " drawing" : ""}`}
+        className="osm-map"
+        data-drawing={drawing}
+        style={{
+          cursor: drawing ? "crosshair" : undefined,
+          touchAction: drawing ? "none" : undefined,
+        }}
+        onPointerDown={pointerDown}
+        onPointerMove={pointerMove}
+        onPointerUp={pointerUp}
+        onPointerCancel={() => {
+          releaseGesture();
+          first.current = null;
+          rectangle.current
+            ?.setBounds(leafletBounds(bounds))
+            .setStyle({ color: "#7763ac" });
+          setMessage("Drawing interrupted. Press and drag again to select.");
+        }}
         role="region"
         aria-label="OpenStreetMap: pan, zoom and select a road area"
       />
@@ -382,11 +518,11 @@ export function MapPanel({
         </details>
       )}
       <p className="muted">
-        50–800 m per side · up to 300 nodes / 1,000 directed roads. Traffic
-        counts and signal timings are not included. Starter demand is divided
-        across reachable entries, with one furthest reachable exit each; edit
-        demand in Network. Public OSM services require a connection and may
-        limit requests.{" "}
+        50–800 m per side · up to 300 junctions/terminals and 1,000 directed
+        roads after shape simplification. Traffic counts and signal timings are
+        not included. Starter demand is divided across reachable entries, with
+        one furthest reachable exit each; edit demand in Network. Public OSM
+        services require a connection and may limit requests.{" "}
         <a
           href="https://www.openstreetmap.org/fixthemap"
           target="_blank"

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { importOsm } from "../../server/imports";
 import { mapBounds, mapFixture, mapMetadata } from "../map-fixtures";
+import { roundaboutFixture } from "../roundabout-fixture";
 
 // UI tests use explicitly synthetic geometry and tiles. Live OSM is verified separately.
 async function openMap(page: Page) {
@@ -246,5 +248,229 @@ test("header map, cloud and workspace controls remain unobstructed at desktop, t
       page.getByRole("dialog", { name: "OpenStreetMap area selection" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Close map", exact: true }).click();
+  }
+});
+test("roundabout imports as one editable structure and labels toggle without resetting simulation", async ({
+  page,
+}) => {
+  await openMap(page);
+  await coordinates(page);
+  const result = importOsm(
+    { text: JSON.stringify(roundaboutFixture()), metadata: mapMetadata },
+    { bounds: mapBounds, syntheticRate: 900 },
+  );
+  await page.route("**/api/maps/osm-area", (route) =>
+    route.fulfill({ json: result }),
+  );
+  await page
+    .getByRole("button", { name: "Preview roads & terminals", exact: true })
+    .click();
+  await expect(page.getByRole("dialog").getByRole("status")).toContainText(
+    "1 roundabouts",
+  );
+  await page
+    .getByRole("button", { name: "Hide map labels", exact: true })
+    .click();
+  await expect(page.locator(".leaflet-tooltip")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Show map labels", exact: true })
+    .click();
+  await expect(page.locator(".leaflet-tooltip")).toHaveCount(8);
+  await page
+    .getByRole("button", { name: "Use area in simulation", exact: true })
+    .click();
+  await expect(page.locator("canvas")).toHaveAttribute("data-roundabouts", "1");
+  await page.getByText("Demand & simulation settings", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Advance 20 seconds", exact: true })
+    .click();
+  await expect(page.locator("canvas")).toHaveAttribute("data-time", "20");
+  await page.getByRole("button", { name: "Hide labels", exact: true }).click();
+  await expect(page.locator("canvas")).toHaveAttribute("data-labels", "false");
+  await expect(page.locator("canvas")).toHaveAttribute("data-time", "20");
+  await page.getByRole("button", { name: "Show labels", exact: true }).click();
+  await expect(page.locator("canvas")).toHaveAttribute("data-labels", "true");
+  await page.getByRole("button", { name: "Network", exact: true }).click();
+  const group = result.scenario.roundabouts![0];
+  await page
+    .getByLabel("Inspect element", { exact: true })
+    .selectOption(`roundabout:${group.id}`);
+  await expect(
+    page.getByRole("heading", { name: "Roundabout", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Inspect element", { exact: true }).locator("option"),
+  ).toHaveCount(18);
+  await page.getByLabel("Roundabout lanes", { exact: true }).fill("2");
+  await page.getByLabel("Roundabout speed", { exact: true }).fill("6");
+  await page
+    .getByRole("button", { name: "Apply roundabout", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Roundabout lanes", { exact: true }),
+  ).toHaveValue("2");
+  await expect(page.locator("canvas")).toHaveAttribute("data-roundabouts", "1");
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export JSON", exact: true }).click();
+  const download = await pending;
+  const saved = JSON.parse(await readFile((await download.path())!, "utf8"));
+  expect(saved.roundabouts).toHaveLength(1);
+  expect(
+    saved.edges
+      .filter((e: { id: string }) => group.edgeIds.includes(e.id))
+      .every(
+        (e: { lanes: number; speedLimit: number; shape?: unknown[] }) =>
+          e.lanes === 2 && e.speedLimit === 6 && (e.shape?.length ?? 0) > 0,
+      ),
+  ).toBe(true);
+  await page
+    .getByRole("button", { name: "Delete selected roundabout", exact: true })
+    .click();
+  await expect(page.locator("canvas")).toHaveAttribute("data-roundabouts", "0");
+  await page
+    .getByRole("button", { name: "↶ Undo last network change", exact: true })
+    .click();
+  await expect(page.locator("canvas")).toHaveAttribute("data-roundabouts", "1");
+});
+test("drawing stays inside the map and preserves Leaflet layout classes across toggles and sizes", async ({
+  page,
+}) => {
+  for (const width of [1280, 834, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await openMap(page);
+    const map = page.getByRole("region", {
+      name: "OpenStreetMap: pan, zoom and select a road area",
+      exact: true,
+    });
+    await expect(map).toHaveClass(/leaflet-container/);
+    for (let i = 0; i < 2; i++) {
+      await page
+        .getByRole("button", { name: "Draw selection", exact: true })
+        .click();
+      await expect(map).toHaveClass(/leaflet-container/);
+      for (const name of ["Close map", "Cancel drawing"])
+        expect(
+          await page
+            .getByRole("button", { name, exact: true })
+            .evaluate((el) => {
+              const r = el.getBoundingClientRect(),
+                top = document.elementFromPoint(
+                  r.x + r.width / 2,
+                  r.y + r.height / 2,
+                );
+              return top === el || (top !== null && el.contains(top));
+            }),
+        ).toBe(true);
+      expect(await map.evaluate((el) => getComputedStyle(el).overflow)).toBe(
+        "hidden",
+      );
+      await page
+        .getByRole("button", { name: "Cancel drawing", exact: true })
+        .click();
+      await expect(map).toHaveClass(/leaflet-container/);
+    }
+    await page
+      .getByRole("button", { name: "Draw selection", exact: true })
+      .click();
+    const box = (await map.boundingBox())!;
+    await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.25);
+    await page.mouse.click(box.x + box.width * 0.65, box.y + box.height * 0.75);
+    await expect(
+      page.getByRole("button", { name: "Draw selection", exact: true }),
+    ).toHaveAttribute("aria-pressed", "false");
+    await expect(map).toHaveClass(/leaflet-container/);
+    await page.getByRole("button", { name: "Close map", exact: true }).click();
+  }
+});
+test("press-and-drag selects a rectangle without panning; normal panning returns after selection", async ({
+  page,
+}) => {
+  await openMap(page);
+  const map = page.getByRole("region", {
+      name: "OpenStreetMap: pan, zoom and select a road area",
+      exact: true,
+    }),
+    pane = map.locator(".leaflet-map-pane");
+  await page
+    .getByRole("button", { name: "Draw selection", exact: true })
+    .click();
+  const box = (await map.boundingBox())!,
+    before = await pane.getAttribute("style");
+  await page.mouse.move(box.x + box.width * 0.35, box.y + box.height * 0.25);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.65, box.y + box.height * 0.75, {
+    steps: 8,
+  });
+  expect(await pane.getAttribute("style")).toBe(before);
+  await page.mouse.up();
+  await expect(
+    page.getByRole("button", { name: "Draw selection", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("dialog").getByRole("status")).toContainText(
+    "Selection ready",
+  );
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  expect(await pane.getAttribute("style")).not.toBe(before);
+});
+test("touch dragging draws inside the map and Escape cancels drawing before closing the workspace", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  try {
+    const page = await context.newPage();
+    await openMap(page);
+    const map = page.getByRole("region", {
+      name: "OpenStreetMap: pan, zoom and select a road area",
+      exact: true,
+    });
+    await page
+      .getByRole("button", { name: "Draw selection", exact: true })
+      .click();
+    const box = (await map.boundingBox())!,
+      pane = map.locator(".leaflet-map-pane"),
+      before = await pane.getAttribute("style"),
+      session = await context.newCDPSession(page);
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: box.x + 60, y: box.y + 40 }],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: box.x + 160, y: box.y + 100 }],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: box.x + 240, y: box.y + 150 }],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect(
+      page.getByRole("button", { name: "Draw selection", exact: true }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(await pane.getAttribute("style")).toBe(before);
+    await page
+      .getByRole("button", { name: "Draw selection", exact: true })
+      .click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Draw selection", exact: true }),
+    ).toHaveAttribute("aria-pressed", "false");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  } finally {
+    await context.close();
   }
 });

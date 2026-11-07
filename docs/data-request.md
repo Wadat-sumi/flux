@@ -18,3 +18,13 @@ Use source/sink IDs from the current Flux network. Count is a nonnegative intege
 Also provide the survey source, permission/license, capture/observation date and any aggregation rules. CSV/spreadsheets or clearly labeled report tables can support preparation, but report reuse permission must be checked. No raw personal GPS identifiers are needed.
 
 The current engine uses simplified passenger-vehicle dynamics and two-axis signal controls. Complex signal phasing, lane-free mixed traffic and empirical multi-class calibration need model extensions before a claim of accurate real-city prediction. TomTom observations help validate speeds/travel times, but its live segment API is not an OD count or signal-controller feed.
+
+
+## Current dataset decision — 7 November 2026
+
+The owner selected a Bengaluru corridor with 2–4 junctions as the first dataset target. Exact junctions and a common observation period still need matching. The recommended first pack is one matched corridor/time period: movement or boundary OD counts for demand, actual signal plans where applicable, and independent travel-time/queue observations for validation. Use 5/15-minute classified bins when available; the current importer averages them into constant rates, so time-varying replay remains an extension. For a roundabout, add circulating headway/accepted-gap observations to calibrate the currently approximate entry-yield rule. Vehicle-class observations become useful calibration input after mixed-vehicle dynamics are implemented.
+
+These requirements align with [Caltrans' microsimulation data guidance](https://dot.ca.gov/programs/transportation-planning/division-of-transportation-planning/state-planning/statewide-modeling/faq), which identifies geometry, controls, classified flows, queues, travel times and trip demand. The existing six-city source review is a starting catalogue, not proof that a complete matching pack has been obtained. Inspect observation year, coordinates, direction/movement definitions, vehicle versus PCU units, collection method, license and source hash before adoption.
+
+
+Current source candidates and adoption gaps are in [the Bengaluru shortlist](bengaluru-data-shortlist.md). BTP-labelled timing PDFs have now been inspected, but their metadata upload date is not proof of present controller settings. Do not mix them with historical counts and describe the result as current calibration.

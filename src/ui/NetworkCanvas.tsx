@@ -12,6 +12,7 @@ import {
   type View,
 } from "./camera";
 import type { Selection } from "./editor";
+import { roadPoints, pathLength, samplePath } from "../model/road-geometry";
 
 export interface Frame {
   states: Float32Array;
@@ -25,6 +26,7 @@ interface Props {
   view: View;
   overlay: boolean;
   decor: boolean;
+  labels: boolean;
   layers: number[];
   editing: boolean;
   tool: "select" | "node";
@@ -120,7 +122,12 @@ export function NetworkCanvas(props: Props) {
             }
           : n;
       };
-      const bounds = s.nodes.map((n) => project(n.x, n.y, n.layer, view));
+      const bounds = [
+        ...s.nodes.map((n) => project(n.x, n.y, n.layer, view)),
+        ...s.edges.flatMap((e) =>
+          (e.shape ?? []).map((n) => project(n.x, n.y, e.layer, view)),
+        ),
+      ];
       const xs = bounds.map((n) => n[0]),
         ys = bounds.map((n) => n[1]);
       const minX = Math.min(...xs, -60) - 75,
@@ -296,69 +303,110 @@ export function NetworkCanvas(props: Props) {
         if (!previous || edge.length > previous.length)
           layerLabels.set(edge.layer, edge);
       }
+      const groupNodes = new Set(
+        (s.roundabouts ?? []).flatMap((r) => r.nodeIds),
+      );
+      const selectedGroup =
+        p.selection?.kind === "roundabout"
+          ? s.roundabouts?.find((r) => r.id === p.selection!.id)
+          : undefined;
+      const strokePath = (
+        points: [number, number][],
+        color: string,
+        w: number,
+        dash: number[] = [],
+      ) => {
+        ctx.beginPath();
+        points.forEach(([x, y], i) =>
+          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y),
+        );
+        ctx.strokeStyle = color;
+        ctx.lineWidth = w;
+        ctx.lineCap = "butt";
+        ctx.lineJoin = "round";
+        ctx.setLineDash(dash);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
       for (const e of sorted) {
         const a = getNode(e.from),
           b = getNode(e.to),
-          pa = point(a.x, a.y, a.layer),
-          pb = point(b.x, b.y, b.layer);
-        const elevated = a.layer > 0 || b.layer > 0,
-          w = roadWidth(e) * scale * (view === "iso" ? 0.75 : 1);
+          world = roadPoints(e, a, b),
+          len = pathLength(world),
+          w = roadWidth(e) * scale,
+          elevated = a.layer > 0 || b.layer > 0;
+        const screen = world.map((n, i) =>
+          point(
+            n.x,
+            n.y,
+            a.layer + ((b.layer - a.layer) * i) / (world.length - 1),
+          ),
+        );
+        const offsetPath = (offset: number) =>
+          world.map((n, i) => {
+            const prev = world[Math.max(0, i - 1)],
+              next = world[Math.min(world.length - 1, i + 1)],
+              angle = Math.atan2(next.y - prev.y, next.x - prev.x);
+            return point(
+              n.x - Math.sin(angle) * offset,
+              n.y + Math.cos(angle) * offset,
+              a.layer + ((b.layer - a.layer) * i) / (world.length - 1),
+            );
+          });
         if (elevated) {
-          stroke(
-            [pa[0] + 5 * scale, pa[1] + 9 * scale],
-            [pb[0] + 5 * scale, pb[1] + 9 * scale],
+          strokePath(
+            screen.map(([x, y]) => [x + 5 * scale, y + 9 * scale]),
             "#CCC6D5",
             w + 5 * scale,
           );
           if (view === "iso")
             for (const t of [0.2, 0.5, 0.8]) {
-              const x = a.x + (b.x - a.x) * t,
-                y = a.y + (b.y - a.y) * t,
-                l = a.layer + (b.layer - a.layer) * t;
-              stroke(point(x, y), point(x, y, l), "#B8B0C3", 4 * scale);
+              const n = samplePath(world, t);
+              stroke(
+                point(n.x, n.y),
+                point(n.x, n.y, a.layer + (b.layer - a.layer) * t),
+                "#B8B0C3",
+                4 * scale,
+              );
             }
         }
-        if (p.selection?.kind === "edge" && p.selection.id === e.id)
-          stroke(pa, pb, "#6554A4", w + 7);
-        stroke(pa, pb, elevated ? palette.bridge : palette.ground, w);
-        const dx = b.x - a.x,
-          dy = b.y - a.y,
-          len = Math.hypot(dx, dy),
-          nx = -dy / len,
-          ny = dx / len;
-        for (let lane = 1; lane < e.lanes; lane++) {
-          const offset = (lane / e.lanes - 0.5) * roadWidth(e);
-          stroke(
-            point(a.x + nx * offset, a.y + ny * offset, a.layer),
-            point(b.x + nx * offset, b.y + ny * offset, b.layer),
+        if (
+          (p.selection?.kind === "edge" && p.selection.id === e.id) ||
+          selectedGroup?.edgeIds.includes(e.id)
+        )
+          strokePath(screen, "#6554A4", w + 7);
+        strokePath(screen, elevated ? palette.bridge : palette.ground, w);
+        for (let lane = 1; lane < e.lanes; lane++)
+          strokePath(
+            offsetPath((lane / e.lanes - 0.5) * roadWidth(e)),
             palette.line,
             Math.max(0.8, scale),
             [9 * scale, 12 * scale],
           );
-        }
         if (e.lanes === 1)
-          stroke(pa, pb, palette.line, Math.max(0.6, scale * 0.7), [
+          strokePath(screen, palette.line, Math.max(0.6, scale * 0.7), [
             8 * scale,
             14 * scale,
           ]);
         if (p.overlay) {
           const ratio = metrics.get(e.id)?.speedRatio ?? 1,
             color = rampColors[Math.min(4, Math.floor(ratio * 4))];
-          stroke(
-            [pa[0], pa[1] + w * 0.33],
-            [pb[0], pb[1] + w * 0.33],
+          strokePath(
+            screen.map(([x, y]) => [x, y + w * 0.33]),
             color,
             Math.max(3, scale * 3),
           );
         }
-        // Small directional chevron, independent of signal/congestion color.
-        const angle = Math.atan2(pb[1] - pa[1], pb[0] - pa[0]);
+        const arrow = samplePath(world, 0.72),
+          ap = point(arrow.x, arrow.y, a.layer + (b.layer - a.layer) * 0.72),
+          arrowNext = point(
+            arrow.x + Math.cos(arrow.angle),
+            arrow.y + Math.sin(arrow.angle),
+            a.layer + (b.layer - a.layer) * 0.72,
+          );
         ctx.save();
-        ctx.translate(
-          pa[0] + (pb[0] - pa[0]) * 0.72,
-          pa[1] + (pb[1] - pa[1]) * 0.72,
-        );
-        ctx.rotate(angle);
+        ctx.translate(...ap);
+        ctx.rotate(Math.atan2(arrowNext[1] - ap[1], arrowNext[0] - ap[0]));
         ctx.strokeStyle = "#FBF9FD";
         ctx.lineWidth = 1.3;
         ctx.beginPath();
@@ -375,25 +423,29 @@ export function NetworkCanvas(props: Props) {
           if (old !== undefined && previousArray?.[old + 1] === edgeIndex)
             pos =
               previousArray[old + 3] + (pos - previousArray[old + 3]) * alpha;
-          const t = Math.min(1, Math.max(0, pos / e.length)),
-            lane = states[i + 2];
-          const offset = ((lane + 0.5) / e.lanes - 0.5) * roadWidth(e),
-            x = a.x + dx * t + nx * offset,
-            y = a.y + dy * t + ny * offset,
-            l = a.layer + (b.layer - a.layer) * t;
-          const ux = dx / len,
-            uy = dy / len,
-            // Scale the glyph with the operational-to-drawn length ratio so
-            // editing a road length does not make queue glyphs overlap.
+          const t = Math.max(0, Math.min(1, pos / e.length)),
+            n = samplePath(world, t),
+            offset = ((states[i + 2] + 0.5) / e.lanes - 0.5) * roadWidth(e),
+            ux = Math.cos(n.angle),
+            uy = Math.sin(n.angle),
+            nx = -uy,
+            ny = ux,
+            x = n.x + nx * offset,
+            y = n.y + ny * offset,
+            l = a.layer + (b.layer - a.layer) * t,
             carLength = Math.min(6, (len / e.length) * 6),
             carWidth = 3.5;
-          const corners = [
-            [-carLength / 2, -carWidth / 2],
-            [carLength / 2, -carWidth / 2],
-            [carLength / 2, carWidth / 2],
-            [-carLength / 2, carWidth / 2],
-          ].map(([u, v]) => point(x + ux * u + nx * v, y + uy * u + ny * v, l));
-          poly(corners, palette.car);
+          poly(
+            [
+              [-carLength / 2, -carWidth / 2],
+              [carLength / 2, -carWidth / 2],
+              [carLength / 2, carWidth / 2],
+              [-carLength / 2, carWidth / 2],
+            ].map(([u, v]) =>
+              point(x + ux * u + nx * v, y + uy * u + ny * v, l),
+            ),
+            palette.car,
+          );
           if (carLength * scale >= 5 && states.length < 9000) {
             const [px, py] = point(x, y, l);
             ctx.fillStyle = "#C1B7D1";
@@ -406,15 +458,19 @@ export function NetworkCanvas(props: Props) {
           }
         }
         if (
+          p.labels &&
           !p.editing &&
           scale > 0.4 &&
+          !net.roundaboutEdges.has(e.id) &&
           (sorted.length <= 8 ||
             e.ramp ||
             layerLabels.get(e.layer)?.id === e.id)
         ) {
-          const tagPosition = elevated ? 0.48 : 0.72;
-          const px = pa[0] + (pb[0] - pa[0]) * tagPosition + 15,
-            py = pa[1] + (pb[1] - pa[1]) * tagPosition + (elevated ? -25 : 25);
+          const t = elevated ? 0.48 : 0.72,
+            n = samplePath(world, t),
+            [tx, ty] = point(n.x, n.y, a.layer + (b.layer - a.layer) * t),
+            px = tx + 15,
+            py = ty + (elevated ? -25 : 25);
           ctx.font = "600 11px system-ui";
           ctx.fillStyle = "rgba(255,255,255,.94)";
           ctx.beginPath();
@@ -430,11 +486,26 @@ export function NetworkCanvas(props: Props) {
           );
         }
       }
+      if (p.labels)
+        for (const r of s.roundabouts ?? []) {
+          const ns = r.nodeIds.map((id) => nodeMap.get(id)!);
+          if (!p.layers.includes(ns[0].layer)) continue;
+          const [x, y] = point(
+            ns.reduce((v, n) => v + n.x, 0) / ns.length,
+            ns.reduce((v, n) => v + n.y, 0) / ns.length,
+            ns[0].layer,
+          );
+          ctx.font = "600 10px system-ui";
+          ctx.fillStyle = "#5F546D";
+          ctx.textAlign = "center";
+          ctx.fillText("ROUNDABOUT", x, y);
+          ctx.textAlign = "start";
+        }
       for (const n of s.nodes) {
         if (!p.layers.includes(n.layer)) continue;
         const actual = getNode(n.id),
           [x, y] = point(actual.x, actual.y, n.layer);
-        if (p.editing) {
+        if (p.editing && !groupNodes.has(n.id)) {
           ctx.beginPath();
           ctx.arc(
             x,
@@ -450,8 +521,8 @@ export function NetworkCanvas(props: Props) {
           ctx.stroke();
           ctx.font = "11px system-ui";
           ctx.fillStyle = "#52475F";
-          ctx.fillText(`${n.id} · L${n.layer}`, x + 10, y - 10);
-        } else if (n.kind === "source" || n.kind === "sink") {
+          if (p.labels) ctx.fillText(`${n.id} · L${n.layer}`, x + 10, y - 10);
+        } else if (p.labels && (n.kind === "source" || n.kind === "sink")) {
           ctx.font = "600 10px system-ui";
           ctx.fillStyle = n.kind === "source" ? "#247a60" : "#bb4d47";
           ctx.fillText(
@@ -464,11 +535,8 @@ export function NetworkCanvas(props: Props) {
           for (const e of net.incoming.get(n.id) ?? []) {
             const from = nodeMap.get(e.from)!,
               t = 0.87;
-            const [px, py] = point(
-              from.x + (n.x - from.x) * t,
-              from.y + (n.y - from.y) * t,
-              n.layer,
-            );
+            const approach = samplePath(roadPoints(e, from, n), t);
+            const [px, py] = point(approach.x, approach.y, n.layer);
             const signal = signalState(
                 net,
                 e,
@@ -500,6 +568,8 @@ export function NetworkCanvas(props: Props) {
         frameCount = 0;
         lastMeasure = now;
       }
+      canvas.dataset.labels = String(p.labels);
+      canvas.dataset.roundabouts = String(s.roundabouts?.length ?? 0);
       canvas.dataset.agents = String(states.length / 9);
       canvas.dataset.time = String(current.current?.metrics.time ?? 0);
       raf = requestAnimationFrame(draw);
@@ -532,25 +602,44 @@ export function NetworkCanvas(props: Props) {
       if (!p.layers.includes(n.layer)) continue;
       const [a, b] = project(n.x, n.y, n.layer, p.view);
       if (Math.hypot(x - (cx + a * scale), y - (cy + b * scale)) < 13)
-        return { kind: "node", id: n.id };
+        return p.scenario.roundabouts?.find((r) => r.nodeIds.includes(n.id))
+          ? {
+              kind: "roundabout",
+              id: p.scenario.roundabouts.find((r) => r.nodeIds.includes(n.id))!
+                .id,
+            }
+          : { kind: "node", id: n.id };
     }
     for (const e of p.scenario.edges.slice().reverse()) {
       const a = p.scenario.nodes.find((n) => n.id === e.from)!,
         b = p.scenario.nodes.find((n) => n.id === e.to)!;
       if (!p.layers.includes(a.layer) && !p.layers.includes(b.layer)) continue;
-      const pa = project(a.x, a.y, a.layer, p.view),
-        pb = project(b.x, b.y, b.layer, p.view);
-      if (
-        segmentDistance(
-          x,
-          y,
-          cx + pa[0] * scale,
-          cy + pa[1] * scale,
-          cx + pb[0] * scale,
-          cy + pb[1] * scale,
-        ) < Math.max(10, roadWidth(e) * scale * 0.45)
-      )
-        return { kind: "edge", id: e.id };
+      const points = roadPoints(e, a, b).map((n, i, all) =>
+        project(
+          n.x,
+          n.y,
+          a.layer + ((b.layer - a.layer) * i) / (all.length - 1),
+          p.view,
+        ),
+      );
+      for (let i = 1; i < points.length; i++)
+        if (
+          segmentDistance(
+            x,
+            y,
+            cx + points[i - 1][0] * scale,
+            cy + points[i - 1][1] * scale,
+            cx + points[i][0] * scale,
+            cy + points[i][1] * scale,
+          ) < Math.max(10, roadWidth(e) * scale * 0.45)
+        ) {
+          const roundabout = p.scenario.roundabouts?.find((r) =>
+            r.edgeIds.includes(e.id),
+          );
+          return roundabout
+            ? { kind: "roundabout", id: roundabout.id }
+            : { kind: "edge", id: e.id };
+        }
     }
     return null;
   };
@@ -603,7 +692,7 @@ export function NetworkCanvas(props: Props) {
             const selected = hit(x, y);
             setHover(
               selected
-                ? `${selected.kind === "edge" ? "Road" : "Node"} · ${selected.id}`
+                ? `${selected.kind === "edge" ? "Road" : selected.kind === "roundabout" ? "Roundabout" : "Node"} · ${selected.id}`
                 : null,
             );
             return;
@@ -645,7 +734,7 @@ export function NetworkCanvas(props: Props) {
           drag.current = null;
         }}
       />
-      {hover && (
+      {hover && props.labels && (
         <div className="canvas-tooltip" aria-hidden="true">
           {hover}
         </div>

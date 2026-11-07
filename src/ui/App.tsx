@@ -120,6 +120,7 @@ export function App() {
   const [view, setView] = useState<View>("iso"),
     [overlay, setOverlay] = useState(false),
     [decor, setDecor] = useState(true),
+    [labels, setLabels] = useState(true),
     [layers, setLayers] = useState([0, 1, 2, 3, 4, 5]);
   const [selection, setSelection] = useState<Selection>(null),
     [tool, setTool] = useState<"select" | "node">("select"),
@@ -376,6 +377,7 @@ export function App() {
               view={view}
               overlay={overlay}
               decor={decor}
+              labels={labels}
               layers={layers}
               editing={mode === "network"}
               tool={tool}
@@ -757,6 +759,13 @@ export function App() {
                 />
                 City context
               </label>
+              <button
+                className="secondary"
+                aria-pressed={!labels}
+                onClick={() => setLabels(!labels)}
+              >
+                {labels ? "Hide labels" : "Show labels"}
+              </button>
             </div>
             <div className="map-time">
               <span className={playing ? "pulse-dot" : "time-dot"} />
