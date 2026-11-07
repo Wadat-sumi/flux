@@ -26,3 +26,25 @@ The catalogue supplies no license value. The sheet has unequal phase durations, 
 Start with **two nearby junctions whose count sites and valid timing plans overlap**, then extend toward four when matching observations exist. Check coordinates against the current 50–800 m map import extent; whole BMRCL corridors span far beyond that. Match survey day/time, source definitions, vehicle versus PCU units and permission before importing. Obtain an independent validation period. Expand the engine for the actual asymmetric/multistage control and vehicle classes before making accuracy claims.
 
 The next acquisition priority is the **raw movement-count annex plus an independent travel-time/queue sample for those same sites**. No complete current pack has yet been verified; the timing collection is the strongest newly inspected control-data lead.
+
+## Follow-up: downloaded survey reports, 7 November 2026
+
+The owner asked for the research status after map fixes took priority. Two additional public BBMP reports were downloaded, hashed and text-inspected; the count tables were also rendered and visually checked. Raw PDFs/text/renders and a retrieval manifest remain in ignored `.tools/research/`; no counts were imported into Flux or redistributed as a dataset.
+
+### JC Road: stronger corridor lead
+
+[BBMP Final Feasibility Report, December 2024](https://data.opencity.in/dataset/2c324650-7caa-40b6-82ef-f99509d5b376/resource/be5f1ca6-4252-432b-b32a-caa54db69dd6/download/305c1726-cae5-43dc-81c1-c0ae0db22c92.pdf), 628 PDF pages. JC Road's Table 44 (PDF page 163) reports seven junctions with separate vehicle/PCU totals and morning/evening peak windows. Tables 45–50 (pages 164–166) give segment-level bus/car journey and running speeds in km/h. The report mentions seven signal-phasing surveys, but matching operational stage tables/offsets are not yet established.
+
+Town Hall, the two Corporation Circle count sites and Hudson Circle are a provisional cluster to investigate for the requested 2–4-junction target; map coverage, movements and common intervals still need checking. Individual peak windows differ, so those totals must not be combined as simultaneous demand or split into invented OD movements. Exact observation dates and an independent validation sample remain unresolved. Page 2 requires an independent suitability check and prior written authority from Altinok for another project's use. No permission is claimed.
+
+SHA-256: `c6a0b8b0695a087ba65f65b2f9ffe63c7180b2f4de3ab63f3bc74f6f65d0f8fa`.
+
+### Hebbal–Silk Board: dated survey lead
+
+[BBMP/Rodic Draft DPR, September 2024](https://data.opencity.in/dataset/857af186-36ba-49c3-8f14-fc2ba7e60dc2/resource/b3630dcd-a4e5-4905-b4ea-92195bf5b1d8/download/1041e5a2-5180-4f1f-b841-474febe1680b.pdf), 227 PDF pages. The catalogue filename/title suggests an inception report; the downloaded cover identifies a draft DPR. Table 57 (PDF page 132) identifies August 2024 classified counts, seven junction turning surveys, passenger OD interviews and speed/delay work. Table 62 (page 142, printed page 133) separates daily/peak vehicles and PCUs. Pages 143–144 contain temporal-volume and speed/delay summaries.
+
+These are aggregate summaries, not yet a movement-by-movement boundary OD file or a verified common-period validation pack. A passenger interview survey cannot automatically become vehicle OD counts. Exact days, raw intervals, signal controls and reuse rights still require verification. The survey dates are historical, not current 2026 observations.
+
+SHA-256: `056ae0c14bc1785cbb601fa91fe39ce2c6d8af52b3032c6d3e4ede5276367390`.
+
+Next acquisition target: request/locate the JC Road raw turning-count sheets and valid signal plans for an overlapping nearby junction cluster, establish reuse authority and common survey periods, and obtain independent travel-time/queue observations. The existing engine needs asymmetric signal phases and time-varying/mixed-vehicle extensions where the selected records require them. Real map geometry is available now; default simulation demand remains explicitly synthetic.
