@@ -45,7 +45,7 @@ case "${1:-}" in
       --digestfile="$flux_digest_file" "$flux_image_ref" "$flux_image_ref"
     flux_digest="$(sudo cat "$flux_digest_file")"
     [[ "$flux_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'Registry digest is invalid.' >&2; exit 1; }
-    printf 'Verified image: `%s@%s`\n' "$FLUX_IMAGE_NAME" "$flux_digest" >> "$GITHUB_STEP_SUMMARY"
+    printf 'Verified image: `%s@%s`\n' "$FLUX_IMAGE_NAME" "$flux_digest" | tee -a "$GITHUB_STEP_SUMMARY"
     ;;
   *) echo 'Usage: ghcr-image.sh build|publish' >&2; exit 1 ;;
 esac

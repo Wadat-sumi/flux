@@ -7,6 +7,10 @@ on:
         description: Publish the verified image to GHCR (does not deploy Azure)
         type: boolean
         default: false
+      run_validation:
+        description: Run the full application test suite before building (disable for deployment-only build and container smoke check)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -17,7 +21,7 @@ concurrency:
 
 jobs:
   verify:
-    if: github.repository == 'Wadat-sumi/flux' && github.ref == 'refs/heads/main'
+    if: github.repository == 'Wadat-sumi/flux' && github.ref == 'refs/heads/main' && inputs.run_validation
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -42,6 +46,10 @@ jobs:
 
   image:
     needs: verify
+    if: >-
+      always() && !cancelled() &&
+      github.repository == 'Wadat-sumi/flux' && github.ref == 'refs/heads/main' &&
+      (needs.verify.result == 'success' || (!inputs.run_validation && needs.verify.result == 'skipped'))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
