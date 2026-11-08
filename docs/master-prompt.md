@@ -624,3 +624,6 @@ Owner-reported live Azure failures, 8 November: the private DNS VNet link return
 
 
 Owner recovery follow-up, 8 November: Terraform initialization, all 14 mock plans and protected-state ownership verification succeeded, then the resource inspector stopped with an opaque error. Do not assume a permission failure from that generic message. Use exact read-only ARM GETs, recognize standard Azure missing-resource error formats, and report only allowlisted error codes, fixed resource addresses and numeric CLI exit status. Never expose raw error payloads or credential-bearing URLs. Keep authorization/API/unknown errors blocking and preserve the reviewed-import/state guards.
+
+
+Owner priority override, 8 November: stop rerunning application tests and focus exclusively on the active Azure deployment issue. For deployment-only troubleshooting, run only targeted deployment/script/Terraform checks; do not repeat application/browser/load suites. Preserve the existing application baseline and the secret/state/approval safeguards.
