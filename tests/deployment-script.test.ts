@@ -136,6 +136,9 @@ function mockedDeployment(
     missingState?: boolean;
     rbacDelay?: boolean;
     failedMigration?: boolean;
+    providerMode?: string;
+    revisionChanged?: boolean;
+    progressed?: boolean;
   } = {},
 ) {
   const root = temp();
@@ -155,6 +158,10 @@ function mockedDeployment(
     );
   if (!options.fresh) {
     const c: Record<string, unknown> = { ...config };
+    if (options.progressed) {
+      c.phase = "1";
+      c.bootstrap_complete = true;
+    }
     if (options.legacy) {
       delete c.schema;
       delete c.bootstrap_complete;
@@ -171,11 +178,22 @@ import fs from 'node:fs';import path from 'node:path';
 const root=process.env.FLUX_TEST_ROOT,a=process.argv.slice(2),tool=path.basename(process.argv[1]),key=a.join(' ');
 fs.appendFileSync(root+'/commands.jsonl',JSON.stringify({tool,args:a})+'\\n');
 const out=v=>{process.stdout.write(typeof v==='string'?v+'\\n':JSON.stringify(v)+'\\n');process.exit(0)},c=fs.existsSync(root+'/.flux-deploy/config.json')?JSON.parse(fs.readFileSync(root+'/.flux-deploy/config.json')):null;
-if(tool==='git'){if(key==='remote get-url origin')out('https://github.com/Wadat-sumi/flux.git');if(key==='branch --show-current')out('main');if(key==='status --porcelain')out('');if(key==='rev-parse HEAD')out('a'.repeat(40));}
+if(tool==='git'){if(key==='remote get-url origin')out('https://github.com/Wadat-sumi/flux.git');if(key==='branch --show-current')out('main');if(key==='status --porcelain')out('');if(key==='rev-parse HEAD')out((process.env.FLUX_TEST_REVISION_CHANGED?'b':'a').repeat(40));}
 if(tool==='az'){
  if(key.startsWith('account show')||key.startsWith('account set')||key.startsWith('version'))out('');
  if(key.startsWith('account list'))out('Fixture subscription');
- if(key.startsWith('provider show')){if(a.includes('registrationState'))out('Registered');out(['Central India']);}
+ if(key.startsWith('provider show')){if(a.includes('registrationState')){
+  const mode=process.env.FLUX_TEST_PROVIDER_MODE;
+  if(a.includes('Microsoft.Network')&&mode){
+   if(mode==='status-fails'){process.stderr.write('SENTINEL_SECRET');process.exit(1);}
+   if(mode==='unknown')out('SENTINEL_SECRET');
+   if(mode==='unregistering')out('Unregistering');
+   if(mode==='in-progress')out('Registering');
+   out(fs.existsSync(root+'/provider-submitted')&&mode!=='stale'?'Registering':'NotRegistered');
+  }
+  out('Registered');
+ }out(['Central India']);}
+ if(key.startsWith('provider register')){if(process.env.FLUX_TEST_PROVIDER_MODE==='request-fails'){process.stderr.write('SENTINEL_SECRET');process.exit(1);}fs.writeFileSync(root+'/provider-submitted','true');out('');}
  if(key.startsWith('postgres flexible-server list-skus'))out([{name:'Standard_B1ms'}]);
  if(key.startsWith('group exists'))out(a.includes(c?.state_group)?(fs.existsSync(root+'/state-applied')||process.env.FLUX_TEST_FOREIGN_STATE?'true':'false'):(fs.existsSync(root+'/applied')||process.env.FLUX_TEST_FOREIGN?'true':'false'));
  if(key.startsWith('group show'))out(process.env.FLUX_TEST_FOREIGN||process.env.FLUX_TEST_FOREIGN_STATE?'foreign-marker':c.deployment_id);
@@ -213,6 +231,10 @@ process.stderr.write('Unexpected mock command: '+tool+' '+key);process.exit(3);
     ...(options.badIp ? { FLUX_TEST_BAD_IP: "1" } : {}),
     ...(options.rbacDelay ? { FLUX_TEST_RBAC_DELAY: "1" } : {}),
     ...(options.failedMigration ? { FLUX_TEST_FAILED_MIGRATION: "1" } : {}),
+    ...(options.providerMode
+      ? { FLUX_TEST_PROVIDER_MODE: options.providerMode }
+      : {}),
+    ...(options.revisionChanged ? { FLUX_TEST_REVISION_CHANGED: "1" } : {}),
   };
   const execute = (input: string, args: string[] = []) =>
     spawnSync("/bin/bash", [join(root, "scripts/deploy-azure.sh"), ...args], {
@@ -399,3 +421,78 @@ test("state RBAC propagation retries and failed migrations never deploy the appl
     f.commands().filter((c) => c.tool === "terraform" && c.args[0] === "apply"),
   ).toHaveLength(4);
 });
+
+test.each(["in-progress", "register"])(
+  "provider %s continues without a global registration wait",
+  (providerMode) => {
+    const f = mockedDeployment({ providerMode });
+    const r = f.execute(
+      providerMode === "register" ? "REGISTER\nNO\n" : "NO\n",
+    );
+    expect(r.stderr).toContain("No changes approved"); // Reaches the first saved plan.
+    expect(r.stdout).toContain("Microsoft.Network: Registering; continuing");
+    const registrations = f
+      .commands()
+      .filter(
+        (c) =>
+          c.tool === "az" &&
+          c.args.slice(0, 2).join(" ") === "provider register",
+      );
+    expect(registrations).toHaveLength(providerMode === "register" ? 1 : 0);
+    expect(registrations.some((c) => c.args.includes("--wait"))).toBe(false);
+  },
+);
+test.each([
+  "request-fails",
+  "status-fails",
+  "unregistering",
+  "unknown",
+  "stale",
+])(
+  "provider %s stops safely before provisioning without exposing CLI payloads",
+  (providerMode) => {
+    const f = mockedDeployment({ providerMode });
+    const r = f.execute("REGISTER\nNO\n");
+    expect(r.status).not.toBe(0);
+    expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+    expect(
+      f
+        .commands()
+        .some(
+          (c) =>
+            c.tool === "terraform" && ["plan", "apply"].includes(c.args[0]),
+        ),
+    ).toBe(false);
+  },
+);
+test("a script update resumes the provider-only checkpoint after verifying both resource groups are absent", () => {
+  const f = mockedDeployment({ revisionChanged: true });
+  const r = f.execute("NO\n");
+  expect(r.stderr).toContain("No changes approved");
+  const c = JSON.parse(
+    readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
+  );
+  expect(c).toMatchObject({
+    revision: "b".repeat(40),
+    deployment_id: config.deployment_id,
+    app: config.app,
+    phase: "0",
+    image: "",
+  });
+});
+test.each([{ progressed: true }, { missingState: true }])(
+  "a script update never upgrades a checkpoint with infrastructure %j",
+  (options) => {
+    const f = mockedDeployment({ ...options, revisionChanged: true });
+    const r = f.execute("");
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain("checkout changed");
+    const c = JSON.parse(
+      readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
+    );
+    expect(c.revision).toBe(config.revision);
+    expect(
+      f.commands().some((c) => c.tool === "terraform" && c.args[0] === "apply"),
+    ).toBe(false);
+  },
+);

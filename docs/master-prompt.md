@@ -615,3 +615,6 @@ Owner follow-up, 8 November: provide one macOS Bash entry point instead of fragm
 
 
 Owner correction, 8 November: the deployment script must request only the subscription ID for infrastructure configuration. Generate resource names, detect public IPv4 and create protected state storage/container and operator RBAC through a separate Terraform bootstrap; do not require manually creating state resources in Portal. Grant the operator access to the new vault through Terraform. Retain reviewed plan approvals, Portal-only secret values and verified GHCR image/migration gates. Preserve existing checkpoints; never silently adopt pre-existing resources or discard progressed state. Keep the bootstrap’s protected metadata-only local state outside Git and use Entra-authenticated remote state for application infrastructure.
+
+
+Owner deployment issue, 8 November: Azure reports `Registering` while the wrapper silently waits at provider registration. Remove the global `--wait`; follow Microsoft’s region-by-region registration guidance, print statuses, bound status/submission calls and stop on failed/unknown/unregistering states. Permit a script-fix upgrade only for a verified pre-infrastructure checkpoint with both resource groups absent and no bootstrap state. Keep progressed state pinned to its original commit.

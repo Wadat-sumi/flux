@@ -100,6 +100,23 @@ open(p,'w').write(json.dumps(d,indent=2)+'\n')
 PY
 }
 
+provider_cli() {
+  # Avoid an unbounded Azure CLI --wait and never expose CLI/debug payloads.
+  python3 - "$1" "$2" <<'PY'
+import subprocess,sys
+action,namespace=sys.argv[1:]
+args=['az','provider',action,'--namespace',namespace,'--only-show-errors']
+args+=['--query','registrationState','--output','tsv'] if action=='show' else ['--output','none']
+try: result=subprocess.run(args,capture_output=True,text=True,timeout=45)
+except subprocess.TimeoutExpired: sys.exit('Azure provider request timed out after 45 seconds. Check connectivity and rerun; registration may continue in Azure.')
+if result.returncode: sys.exit('Azure provider request failed. Check Azure CLI login, subscription permissions and connectivity, then rerun.')
+if action=='show':
+ status=result.stdout.strip()
+ if status not in ['Registered','Registering','NotRegistered','Unregistering']: sys.exit('Azure returned an unexpected provider registration state. Check provider status in the Portal.')
+ print(status)
+PY
+}
+
 case "${1:-}" in
   --help|-h)
     printf 'Usage: bash scripts/deploy-azure.sh [--check | --check-config FILE | --audit-plan FILE]\nRun without flags for guided Central India deployment. --audit-plan reads Terraform JSON from stdin.\n'
@@ -156,19 +173,39 @@ validate_config "$CONFIG"
 SUB="$(cfg subscription)"; APP="$(cfg app)"; GROUP="$(cfg group)"; VAULT="$(cfg vault)"
 STATE_GROUP="$(cfg state_group)"; STATE_ACCOUNT="$(cfg state_account)"; DEPLOY_ID="$(cfg deployment_id)"
 OPERATOR_IP="$(cfg operator_ip)"; PHASE="$(cfg phase)"
-[ "$(cfg revision)" = "$(git rev-parse HEAD)" ] || fail 'The checkout changed since this deployment began. Resume with its original commit; do not silently change deployed code.'
 az account set --subscription "$SUB"
 export ARM_SUBSCRIPTION_ID="$SUB" ARM_USE_CLI=true
+if [ "$(cfg revision)" != "$(git rev-parse HEAD)" ]; then
+  # A provider-registration interruption precedes any Terraform resources. Allow
+  # a script fix only after proving that this checkpoint has no infrastructure.
+  [ "$PHASE" = 0 ] && [ "$(cfg bootstrap_complete)" = False ] && [ ! -e "$BOOT/terraform.tfstate" ] && [ ! -e "$BOOT/terraform.tfstate.backup" ] || fail 'The checkout changed after infrastructure work began. Resume its original commit; no checkpoint will be discarded.'
+  for group in "$GROUP" "$STATE_GROUP"; do
+    [ "$(az group exists --name "$group" --output tsv | tr '[:upper:]' '[:lower:]')" = false ] || fail 'The checkout changed and resources already exist. Resume its original commit; nothing will be adopted or discarded.'
+  done
+  save revision "$(git rev-parse HEAD)"
+  save image ''
+  save execution ''
+  printf 'Updated the unprovisioned checkpoint to this commit; resource names and deployment identity are preserved.\n'
+fi
 printf '\nSubscription: %s\nRegion: %s\nApplication: %s\nResource group: %s\n' "$SUB" "$REGION" "$APP" "$GROUP"
 printf 'Generated state group: %s\nGenerated state account: %s\nDetected operator: %s\nGHCR token owner: Wadat-sumi\n' "$STATE_GROUP" "$STATE_ACCOUNT" "$OPERATOR_IP"
 
 # Verify provider registrations; the owner reviews any required subscription change.
 for provider in Microsoft.App Microsoft.DBforPostgreSQL Microsoft.Network Microsoft.ManagedIdentity Microsoft.OperationalInsights Microsoft.KeyVault Microsoft.Storage; do
-  status="$(az provider show --namespace "$provider" --query registrationState --output tsv)"
-  if [ "$status" != Registered ]; then
+  printf 'Checking %s registration...\n' "$provider"
+  status="$(provider_cli show "$provider")"
+  if [ "$status" = NotRegistered ]; then
     confirm "Register $provider in this subscription?" REGISTER
-    az provider register --namespace "$provider" --wait --output none
+    printf 'Submitting %s registration (request timeout: 45 seconds)...\n' "$provider"
+    provider_cli register "$provider"
+    status="$(provider_cli show "$provider")"
   fi
+  case "$status" in
+    Registered) printf '%s: Registered.\n' "$provider" ;;
+    Registering) printf '%s: Registering; continuing without waiting for all Azure regions.\n' "$provider" ;;
+    Unregistering) fail "$provider is unregistering. Wait for that operation to finish before retrying." ;;
+    *) fail "$provider registration is not ready. Check its status and rerun; no resources will be provisioned yet." ;;
+  esac
 done
 az provider show --namespace Microsoft.App --query "resourceTypes[?resourceType=='managedEnvironments'].locations | [0]" --output json |
   python3 -c 'import json,sys; a=json.load(sys.stdin); sys.exit(0 if any(str(x).replace(" ","").lower()=="centralindia" for x in (a or [])) else "Container Apps Central India availability could not be confirmed.")'
