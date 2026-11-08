@@ -7,6 +7,7 @@ import {
   copyFileSync,
   symlinkSync,
   rmSync,
+  existsSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -15,6 +16,8 @@ import { spawnSync } from "node:child_process";
 const source = resolve("scripts/deploy-azure.sh"),
   dirs: string[] = [];
 const config = {
+  schema: 2,
+  bootstrap_complete: false,
   deployment_id: "11111111-1111-4111-8111-111111111111",
   subscription: "22222222-2222-4222-8222-222222222222",
   app: "flux-test",
@@ -67,6 +70,9 @@ test.each([
   { subscription: "-".repeat(36) },
   { password: "SENTINEL_SECRET" },
   { execution: "name'; malicious" },
+  { bootstrap_complete: "true" },
+  { schema: 999 },
+  { phase: "1", bootstrap_complete: false },
 ])("unsafe configuration %j is rejected without echoing values", (patch) => {
   const result = run(["--check-config", fixture(patch)]);
   expect(result.status).not.toBe(0);
@@ -120,13 +126,42 @@ test("plan permits scoped changes and hides secret-bearing JSON", () => {
 });
 
 function mockedDeployment(
-  options: { foreign?: boolean; destructive?: boolean } = {},
+  options: {
+    foreign?: boolean;
+    foreignState?: boolean;
+    destructive?: boolean;
+    fresh?: boolean;
+    badIp?: boolean;
+    legacy?: boolean;
+    missingState?: boolean;
+    rbacDelay?: boolean;
+    failedMigration?: boolean;
+  } = {},
 ) {
   const root = temp();
-  for (const name of ["scripts", "infra/terraform", ".flux-deploy", "bin"])
+  for (const name of [
+    "scripts",
+    "infra/terraform",
+    "infra/bootstrap",
+    ".flux-deploy",
+    "bin",
+  ])
     mkdirSync(join(root, name), { recursive: true });
   copyFileSync(source, join(root, "scripts/deploy-azure.sh"));
-  writeFileSync(join(root, ".flux-deploy/config.json"), JSON.stringify(config));
+  for (const file of ["main.tf", ".terraform.lock.hcl"])
+    copyFileSync(
+      resolve("infra/bootstrap", file),
+      join(root, "infra/bootstrap", file),
+    );
+  if (!options.fresh) {
+    const c: Record<string, unknown> = { ...config };
+    if (options.legacy) {
+      delete c.schema;
+      delete c.bootstrap_complete;
+    }
+    writeFileSync(join(root, ".flux-deploy/config.json"), JSON.stringify(c));
+  }
+  if (options.missingState) writeFileSync(join(root, "state-applied"), "true");
   const mock = join(root, "bin/mock.mjs"),
     log = join(root, "commands.jsonl");
   writeFileSync(
@@ -135,31 +170,32 @@ function mockedDeployment(
 import fs from 'node:fs';import path from 'node:path';
 const root=process.env.FLUX_TEST_ROOT,a=process.argv.slice(2),tool=path.basename(process.argv[1]),key=a.join(' ');
 fs.appendFileSync(root+'/commands.jsonl',JSON.stringify({tool,args:a})+'\\n');
-const out=v=>{process.stdout.write(typeof v==='string'?v+'\\n':JSON.stringify(v)+'\\n');process.exit(0)},c=JSON.parse(fs.readFileSync(root+'/.flux-deploy/config.json'));
-if(tool==='git'){if(key==='remote get-url origin')out('https://github.com/Wadat-sumi/flux.git');if(key==='branch --show-current')out('main');if(key==='status --porcelain')out('');if(key==='rev-parse HEAD')out(c.revision);}
+const out=v=>{process.stdout.write(typeof v==='string'?v+'\\n':JSON.stringify(v)+'\\n');process.exit(0)},c=fs.existsSync(root+'/.flux-deploy/config.json')?JSON.parse(fs.readFileSync(root+'/.flux-deploy/config.json')):null;
+if(tool==='git'){if(key==='remote get-url origin')out('https://github.com/Wadat-sumi/flux.git');if(key==='branch --show-current')out('main');if(key==='status --porcelain')out('');if(key==='rev-parse HEAD')out('a'.repeat(40));}
 if(tool==='az'){
  if(key.startsWith('account show')||key.startsWith('account set')||key.startsWith('version'))out('');
+ if(key.startsWith('account list'))out('Fixture subscription');
  if(key.startsWith('provider show')){if(a.includes('registrationState'))out('Registered');out(['Central India']);}
  if(key.startsWith('postgres flexible-server list-skus'))out([{name:'Standard_B1ms'}]);
- if(key.startsWith('group exists'))out(fs.existsSync(root+'/applied')||process.env.FLUX_TEST_FOREIGN?'true':'false');
- if(key.startsWith('group show'))out(process.env.FLUX_TEST_FOREIGN?'foreign-marker':c.deployment_id);
+ if(key.startsWith('group exists'))out(a.includes(c?.state_group)?(fs.existsSync(root+'/state-applied')||process.env.FLUX_TEST_FOREIGN_STATE?'true':'false'):(fs.existsSync(root+'/applied')||process.env.FLUX_TEST_FOREIGN?'true':'false'));
+ if(key.startsWith('group show'))out(process.env.FLUX_TEST_FOREIGN||process.env.FLUX_TEST_FOREIGN_STATE?'foreign-marker':c.deployment_id);
  if(key.startsWith('storage account show'))out({location:'centralindia',allowSharedKeyAccess:false,allowBlobPublicAccess:false,enableHttpsTrafficOnly:true,minimumTlsVersion:'TLS1_2',networkRuleSet:{defaultAction:'Deny'}});
  if(key.startsWith('storage account blob-service-properties show'))out({isVersioningEnabled:true,deleteRetentionPolicy:{enabled:true},containerDeleteRetentionPolicy:{enabled:true}});
- if(key.startsWith('storage container show'))out('');
+ if(key.startsWith('storage container show')){if(process.env.FLUX_TEST_RBAC_DELAY&&!fs.existsSync(root+'/rbac-retried')){fs.writeFileSync(root+'/rbac-retried','true');process.exit(1);}out('');}
  if(key.startsWith('keyvault secret list'))out('true');
  if(key.startsWith('containerapp job start'))out('flux-test-migrate-fixture');
- if(key.startsWith('containerapp job execution list'))out('Succeeded');
+ if(key.startsWith('containerapp job execution list'))out(process.env.FLUX_TEST_FAILED_MIGRATION?'Failed':'Succeeded');
 }
 if(tool==='terraform'){
  if(key==='version -json')out({terraform_version:'1.9.8'});
  if(a[0]==='init'||a[0]==='fmt'||a[0]==='validate'||a[0]==='test')out('');
  if(a[0]==='plan'){const p=a.find(x=>x.startsWith('-out=')).slice(5);fs.writeFileSync(p,'Private binary-plan fixture');out('Mock plan');}
  if(a[0]==='show')out({resource_changes:[{mode:'managed',change:{actions:process.env.FLUX_TEST_DESTRUCTIVE?['delete','create']:['create'],before:null,after:{value:'SENTINEL_SECRET'}}}]});
- if(a[0]==='apply'){fs.writeFileSync(root+'/applied','true');out('');}
+ if(a[0]==='apply'){if(process.cwd().endsWith('/bootstrap')){fs.writeFileSync(root+'/state-applied','true');fs.writeFileSync(process.cwd()+'/terraform.tfstate','Fixture metadata only');}else fs.writeFileSync(root+'/applied','true');out('');}
  if(key==='output -raw backend_url')out('https://flux-test-api.fixture.centralindia.azurecontainerapps.io');
 }
 if(tool==='open')out('');
-if(tool==='curl')out({status:'ok'});
+if(tool==='curl'){if(key.includes('api.ipify.org')||key.includes('checkip.amazonaws.com'))out(process.env.FLUX_TEST_BAD_IP?'192.168.1.1':'8.8.8.8');out({status:'ok'});}
 if(tool==='sleep')out('');
 process.stderr.write('Unexpected mock command: '+tool+' '+key);process.exit(3);
 `,
@@ -172,7 +208,11 @@ process.stderr.write('Unexpected mock command: '+tool+' '+key);process.exit(3);
     PATH: join(root, "bin") + ":" + process.env.PATH,
     FLUX_TEST_ROOT: root,
     ...(options.foreign ? { FLUX_TEST_FOREIGN: "1" } : {}),
+    ...(options.foreignState ? { FLUX_TEST_FOREIGN_STATE: "1" } : {}),
     ...(options.destructive ? { FLUX_TEST_DESTRUCTIVE: "1" } : {}),
+    ...(options.badIp ? { FLUX_TEST_BAD_IP: "1" } : {}),
+    ...(options.rbacDelay ? { FLUX_TEST_RBAC_DELAY: "1" } : {}),
+    ...(options.failedMigration ? { FLUX_TEST_FAILED_MIGRATION: "1" } : {}),
   };
   const execute = (input: string, args: string[] = []) =>
     spawnSync("/bin/bash", [join(root, "scripts/deploy-azure.sh"), ...args], {
@@ -215,7 +255,7 @@ test("read-only preflight never logs in, plans, applies or calls a provider", ()
 test("mock deployment completes Central India stages once and resumes without reapplying or rerunning migrations", () => {
   const f = mockedDeployment();
   const r = f.execute(
-    "APPLY-flux-test\n\nAPPLY-flux-test\nAPPLY-flux-test\nMIGRATE\nAPPLY-flux-test\n",
+    "APPLY-flux-test\nAPPLY-flux-test\n\nAPPLY-flux-test\nAPPLY-flux-test\nMIGRATE\nAPPLY-flux-test\n",
   );
   expect(r.status, r.stdout + r.stderr).toBe(0);
   expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
@@ -223,6 +263,7 @@ test("mock deployment completes Central India stages once and resumes without re
     readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
   );
   expect(c.phase).toBe("4");
+  expect(c.bootstrap_complete).toBe(true);
   const vars = JSON.parse(
     readFileSync(join(f.root, ".flux-deploy/runtime.tfvars.json"), "utf8"),
   );
@@ -231,16 +272,19 @@ test("mock deployment completes Central India stages once and resumes without re
     deploy_backend_app: true,
     backend_allow_registration: false,
     enable_tomtom: false,
+    grant_operator_secret_access: true,
   });
   expect(
-    f.commands().find((c) => c.tool === "terraform" && c.args[0] === "init")!
-      .args,
+    f
+      .commands()
+      .filter((c) => c.tool === "terraform" && c.args[0] === "init")
+      .at(-1)!.args,
   ).toContain("-reconfigure");
   const again = f.execute("\n");
   expect(again.status, again.stdout + again.stderr).toBe(0);
   expect(
     f.commands().filter((c) => c.tool === "terraform" && c.args[0] === "apply"),
-  ).toHaveLength(4);
+  ).toHaveLength(5);
   expect(
     f
       .commands()
@@ -260,7 +304,12 @@ test("mock deployment completes Central India stages once and resumes without re
       ),
   ).toBe(false);
 });
-test.each([{ foreign: true }, { destructive: true }, {}])(
+test.each([
+  { foreign: true },
+  { foreignState: true },
+  { destructive: true },
+  {},
+])(
   "mock deployment stops before apply on foreign ownership, destructive plans or declined approval %j",
   (options) => {
     const f = mockedDeployment(options);
@@ -271,3 +320,82 @@ test.each([{ foreign: true }, { destructive: true }, {}])(
     ).toBe(false);
   },
 );
+
+test("fresh deployment only asks for the subscription as infrastructure configuration", () => {
+  const f = mockedDeployment({ fresh: true });
+  const r = f.execute(config.subscription + "\nNO\n");
+  expect(r.status).not.toBe(0); // Explicitly decline the first saved plan.
+  expect(r.stderr).toContain("No changes approved");
+  const c = JSON.parse(
+    readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
+  );
+  expect(c).toMatchObject({
+    subscription: config.subscription,
+    schema: 2,
+    operator_ip: "8.8.8.8/32",
+    bootstrap_complete: false,
+    ghcr_user: "Wadat-sumi",
+  });
+  expect(c.app).toMatch(/^flux-staging-[a-f0-9]{10}$/);
+  expect(c.state_account).toMatch(/^fluxstate[a-f0-9]{10}$/);
+  expect(r.stderr).not.toMatch(
+    /State resource group:|State storage-account name|Your public IPv4|New application name|GitHub username owning/,
+  );
+  expect(
+    f.commands().filter((c) => c.tool === "terraform" && c.args[0] === "apply"),
+  ).toHaveLength(0);
+});
+test.each([{ fresh: true, badIp: true }, { fresh: true }])(
+  "bad automatic IP or subscription fails before provisioning %j",
+  (options) => {
+    const f = mockedDeployment(options);
+    const r = f.execute(
+      (options.badIp ? config.subscription : "bad-subscription") + "\n",
+    );
+    expect(r.status).not.toBe(0);
+    expect(existsSync(join(f.root, ".flux-deploy/config.json"))).toBe(false);
+    expect(
+      f
+        .commands()
+        .some(
+          (c) =>
+            c.tool === "terraform" && ["plan", "apply"].includes(c.args[0]),
+        ),
+    ).toBe(false);
+  },
+);
+test("unprovisioned legacy configuration upgrades without asking for resource names", () => {
+  const f = mockedDeployment({ legacy: true });
+  const r = f.execute("NO\n");
+  expect(r.stderr).toContain("No changes approved");
+  const c = JSON.parse(
+    readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
+  );
+  expect(c.schema).toBe(2);
+  expect(c.subscription).toBe(config.subscription);
+});
+test("missing local bootstrap state never adopts the existing state resource group", () => {
+  const f = mockedDeployment({ missingState: true });
+  const r = f.execute("");
+  expect(r.status).not.toBe(0);
+  expect(r.stderr).toContain("Bootstrap state is missing");
+  expect(
+    f.commands().some((c) => c.tool === "terraform" && c.args[0] === "apply"),
+  ).toBe(false);
+});
+test("state RBAC propagation retries and failed migrations never deploy the application", () => {
+  const f = mockedDeployment({ rbacDelay: true, failedMigration: true });
+  const r = f.execute(
+    "APPLY-flux-test\nAPPLY-flux-test\n\nAPPLY-flux-test\nAPPLY-flux-test\nMIGRATE\n",
+  );
+  expect(r.status).not.toBe(0);
+  expect(r.stdout).toContain("Waiting for state-store RBAC");
+  expect(r.stderr).toContain("Migration failed");
+  const c = JSON.parse(
+    readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
+  );
+  expect(c.phase).toBe("3");
+  expect(
+    f.commands().filter((c) => c.tool === "terraform" && c.args[0] === "apply"),
+  ).toHaveLength(4);
+});

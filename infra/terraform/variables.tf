@@ -136,3 +136,8 @@ variable "backend_allow_registration" {
   type        = bool
   default     = false
 }
+variable "grant_operator_secret_access" {
+  description = "Grant the authenticated deploying identity Secrets Officer on the new Flux vault for Portal entry and provisioning."
+  type        = bool
+  default     = false
+}

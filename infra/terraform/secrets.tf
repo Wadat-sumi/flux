@@ -1,5 +1,11 @@
 # Real values are entered into Key Vault through the Portal, never Terraform inputs.
 # PostgreSQL provisioning necessarily reads the admin credential: protected state is mandatory.
+resource "azurerm_role_assignment" "operator_secrets" {
+  count                = var.enable_backend && var.grant_operator_secret_access ? 1 : 0
+  scope                = azurerm_key_vault.backend[0].id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.backend[0].object_id
+}
 data "azurerm_key_vault_secret" "database_admin_password" {
   count        = local.database_enabled ? 1 : 0
   name         = "database-admin-password"

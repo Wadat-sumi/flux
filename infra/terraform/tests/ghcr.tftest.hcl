@@ -124,11 +124,16 @@ run "database_secret_cannot_be_registry_credential" {
 run "central_india_and_ownership_marker" {
   command = plan
   variables {
-    deployment_id  = "11111111-1111-4111-8111-111111111111"
-    enable_backend = true
+    deployment_id                = "11111111-1111-4111-8111-111111111111"
+    enable_backend               = true
+    grant_operator_secret_access = true
   }
   assert {
     condition     = azurerm_resource_group.flux.location == "centralindia" && azurerm_resource_group.flux.tags.fluxDeploymentId == "11111111-1111-4111-8111-111111111111"
     error_message = "Central India and the deployment ownership marker must reach the resource group."
+  }
+  assert {
+    condition     = azurerm_role_assignment.operator_secrets[0].role_definition_name == "Key Vault Secrets Officer"
+    error_message = "The wrapper must grant vault entry access to the authenticated operator."
   }
 }

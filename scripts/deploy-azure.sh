@@ -15,6 +15,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 WORK="$ROOT/.flux-deploy"
 CONFIG="$WORK/config.json"
 TF="$ROOT/infra/terraform"
+BOOT="$WORK/bootstrap"
 REPO='https://github.com/Wadat-sumi/flux'
 REGION='centralindia'
 
@@ -30,14 +31,15 @@ confirm() {
 browser() { if command -v open >/dev/null 2>&1; then open "$1"; else printf 'Open: %s\n' "$1"; fi; }
 cfg() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' "$CONFIG" "$1"; }
 save() {
-  python3 -c 'import json,os,sys; p,k,v=sys.argv[1:]; d=json.load(open(p)); d[k]=v; t=p+".tmp"; open(t,"w").write(json.dumps(d,indent=2)+"\n"); os.chmod(t,0o600); os.replace(t,p)' "$CONFIG" "$1" "$2"
+  python3 -c 'import json,os,sys; p,k,v=sys.argv[1:]; d=json.load(open(p)); d[k]=(v=="true") if k=="bootstrap_complete" else v; t=p+".tmp"; open(t,"w").write(json.dumps(d,indent=2)+"\n"); os.chmod(t,0o600); os.replace(t,p)' "$CONFIG" "$1" "$2"
 }
 validate_config() {
   python3 - "$1" <<'PY'
 import ipaddress,json,re,sys,uuid
 try:
- d=json.load(open(sys.argv[1])); allowed={'deployment_id','subscription','app','group','vault','state_group','state_account','operator_ip','ghcr_user','image','phase','execution','revision'}
+ d=json.load(open(sys.argv[1])); allowed={'deployment_id','subscription','app','group','vault','state_group','state_account','operator_ip','ghcr_user','image','phase','execution','revision','schema','bootstrap_complete'}
  if set(d)-allowed: raise ValueError('Unexpected configuration fields; never add secret values.')
+ if d.get('schema')!=2 or not isinstance(d.get('bootstrap_complete'),bool): raise ValueError('Invalid deployment schema/checkpoint.')
  patterns={'deployment_id':r'[a-f0-9-]{36}','subscription':r'[a-fA-F0-9-]{36}','app':r'flux-[a-z0-9][a-z0-9-]{0,17}[a-z0-9]','group':r'flux-[a-zA-Z0-9_-]{2,70}','vault':r'flux-[a-z0-9-]{3,19}','state_group':r'flux-[a-zA-Z0-9_-]{2,70}','state_account':r'flux[a-z0-9]{3,20}','ghcr_user':r'[A-Za-z0-9][A-Za-z0-9-]{0,38}','revision':r'[a-f0-9]{40}'}
  for key,pattern in patterns.items():
   if not re.fullmatch(pattern,str(d.get(key,''))): raise ValueError('Invalid '+key)
@@ -48,6 +50,7 @@ try:
  if str(d.get('phase','')) not in ['0','1','2','3','4']: raise ValueError('Invalid checkpoint phase.')
  if d.get('image') and not re.fullmatch(r'ghcr\.io/wadat-sumi/flux@sha256:[a-f0-9]{64}',d['image']): raise ValueError('Use the immutable Flux GHCR digest.')
  if int(d['phase'])>=3 and not d.get('image'): raise ValueError('A deployed job requires its image checkpoint.')
+ if int(d['phase'])>0 and not d['bootstrap_complete']: raise ValueError('Application requires completed state bootstrap.')
  if int(d['phase'])>=4 and not d.get('execution'): raise ValueError('A deployed app requires its migration execution checkpoint.')
  if d.get('execution') and not re.fullmatch(r'[A-Za-z0-9-]{1,100}',d['execution']): raise ValueError('Invalid migration execution name.')
 except (ValueError,KeyError,OSError,TypeError):
@@ -59,7 +62,8 @@ audit_plan() {
   python3 -c '
 import json,sys
 c=json.load(open(sys.argv[1])); p=json.load(sys.stdin)
-prefix=("/subscriptions/"+c["subscription"]+"/resourceGroups/"+c["group"]).lower()
+group=c["state_group"] if sys.argv[2]=="bootstrap" else c["group"]
+prefix=("/subscriptions/"+c["subscription"]+"/resourceGroups/"+group).lower()
 vault="https://"+c["vault"]+".vault.azure.net/secrets/"
 counts={}
 for r in p.get("resource_changes",[]):
@@ -67,11 +71,33 @@ for r in p.get("resource_changes",[]):
  change=r.get("change",{}); actions=change.get("actions",[])
  if actions not in [["no-op"],["create"],["update"]]: sys.exit("Plan rejected: deletion, replacement or unknown actions are not allowed.")
  old=change.get("before") or {}; identity=old.get("id","").lower()
- if identity and not (identity==prefix or identity.startswith(prefix+"/") or identity.startswith(vault)):
+ if identity and not (identity==prefix or identity.startswith(prefix+"/") or (sys.argv[2]!="bootstrap" and identity.startswith(vault))):
   sys.exit("Plan rejected: an existing resource is outside this deployment scope.")
  for action in actions: counts[action]=counts.get(action,0)+1
 print("Plan action counts (no values): "+json.dumps(counts,sort_keys=True))
-' "$CONFIG"
+' "$CONFIG" "${1:-application}"
+}
+
+detect_ip() {
+  for endpoint in https://api.ipify.org https://checkip.amazonaws.com; do
+    candidate="$(curl -4 --fail --silent --max-time 10 --proto '=https' --tlsv1.2 "$endpoint" || true)"
+    if OPERATOR_IP="$(python3 -c 'import ipaddress,sys
+try:
+ a=ipaddress.ip_address(sys.argv[1].strip()); assert a.version==4 and a.is_global; print(str(a)+"/32")
+except (ValueError,AssertionError): sys.exit(1)' "$candidate")"; then return; fi
+  done
+  fail 'Could not detect a public IPv4. Check your connection/VPN and rerun; no manual network values are needed.'
+}
+
+create_config() {
+  detect_ip
+  python3 - "$CONFIG" "$SUB" "$OPERATOR_IP" "$(git rev-parse HEAD)" <<'PY'
+import json,sys,uuid
+p,sub,ip,rev=sys.argv[1:]; uuid.UUID(sub)
+deployment=str(uuid.uuid4()); suffix=deployment.replace('-','')[:10]; app='flux-staging-'+suffix
+d=dict(schema=2,bootstrap_complete=False,deployment_id=deployment,subscription=sub,app=app,group=app+'-rg',vault='flux-vault-'+suffix,state_group='flux-state-'+suffix+'-rg',state_account='fluxstate'+suffix,operator_ip=ip,ghcr_user='Wadat-sumi',revision=rev,phase='0',image='',execution='')
+open(p,'w').write(json.dumps(d,indent=2)+'\n')
+PY
 }
 
 case "${1:-}" in
@@ -103,30 +129,28 @@ trap 'rmdir "$WORK/lock" 2>/dev/null || true' EXIT
 trap 'printf "\nInterrupted. Resources may still be running; rerun the same command to resume.\n" >&2; exit 130' INT TERM
 
 if ! az account show --output none >/dev/null 2>&1; then az login --output none; fi
-if [ ! -f "$CONFIG" ]; then
+if [ -f "$CONFIG" ] && [ "$(cfg schema)" != 2 ]; then
+  # The previous prompt-only version may have saved an unprovisioned config.
+  # Never discard a checkpoint or adopt manually created resources.
+  [ "$(cfg phase)" = 0 ] || fail 'An older deployment already progressed. Resume its original commit for review; no state will be discarded.'
+  SUB="$(cfg subscription)"
+  python3 -c 'import sys,uuid; uuid.UUID(sys.argv[1])' "$SUB" || fail 'Invalid saved subscription ID.'
+  az account set --subscription "$SUB"
+  for key in group state_group; do
+    old_group="$(cfg "$key")"
+    [ -n "$old_group" ] || fail 'The older configuration is incomplete; retain it for review.'
+    [ "$(az group exists --name "$old_group" --output tsv | tr '[:upper:]' '[:lower:]')" = false ] || fail 'Older resources exist. Keep the previous checkpoint/state and resume its original commit; nothing will be adopted.'
+  done
+  mv "$CONFIG" "$WORK/config.previous.$(date +%s).json"
+  create_config
+elif [ ! -f "$CONFIG" ]; then
   printf '\nFlux deployment: Central India, GHCR, private PostgreSQL and Key Vault. Azure/GitHub usage can incur charges.\n'
   az account list --query '[].{Name:name,Subscription:id}' --output table
   ask 'Azure subscription ID: '; SUB="$REPLY"
-  suffix="$(python3 -c 'import secrets; print(secrets.token_hex(3))')"
-  ask "New application name [flux-staging-$suffix]: "; APP="${REPLY:-flux-staging-$suffix}"
-  ask "New application resource group [$APP-rg]: "; GROUP="${REPLY:-$APP-rg}"
-  ask "New Key Vault name [flux-vault-$suffix]: "; VAULT="${REPLY:-flux-vault-$suffix}"
-  printf '\nCreate a dedicated protected state store in Central India through Azure Portal: separate flux- resource group, StorageV2 account, private tfstate Blob container, shared keys/anonymous access disabled, versioning/soft delete enabled, approved client IP only. Grant your operator Storage Blob Data Contributor.\n'
-  browser 'https://portal.azure.com/'
-  ask 'State resource group: '; STATE_GROUP="$REPLY"
-  ask 'State storage-account name (lowercase, flux-prefixed): '; STATE_ACCOUNT="$REPLY"
-  ask 'Your public IPv4 /32 (as shown in the Portal): '; OPERATOR_IP="$REPLY"
-  ask 'GitHub username owning the read-only GHCR pull token [Wadat-sumi]: '; GHCR_USER="${REPLY:-Wadat-sumi}"
-  python3 - "$CONFIG" "$SUB" "$APP" "$GROUP" "$VAULT" "$STATE_GROUP" "$STATE_ACCOUNT" "$OPERATOR_IP" "$GHCR_USER" "$(git rev-parse HEAD)" <<'PY'
-import json,sys,uuid
-p,*v=sys.argv[1:]; keys=['subscription','app','group','vault','state_group','state_account','operator_ip','ghcr_user','revision']
-d=dict(zip(keys,v));d.update(deployment_id=str(uuid.uuid4()),phase='0',image='',execution='')
-import re,ipaddress
-if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]{0,38}',d['ghcr_user']): sys.exit('Enter a GitHub username, never a token value.')
-try: uuid.UUID(d['subscription']); ipaddress.ip_network(d['operator_ip'],strict=True)
-except ValueError: sys.exit('Check the subscription UUID and public IPv4 /32.')
-open(p,'w').write(json.dumps(d,indent=2)+'\n')
-PY
+  python3 -c 'import sys,uuid
+try: uuid.UUID(sys.argv[1])
+except ValueError: sys.exit("Enter a valid Azure subscription UUID.")' "$SUB"
+  create_config
 fi
 validate_config "$CONFIG"
 SUB="$(cfg subscription)"; APP="$(cfg app)"; GROUP="$(cfg group)"; VAULT="$(cfg vault)"
@@ -136,6 +160,7 @@ OPERATOR_IP="$(cfg operator_ip)"; PHASE="$(cfg phase)"
 az account set --subscription "$SUB"
 export ARM_SUBSCRIPTION_ID="$SUB" ARM_USE_CLI=true
 printf '\nSubscription: %s\nRegion: %s\nApplication: %s\nResource group: %s\n' "$SUB" "$REGION" "$APP" "$GROUP"
+printf 'Generated state group: %s\nGenerated state account: %s\nDetected operator: %s\nGHCR token owner: Wadat-sumi\n' "$STATE_GROUP" "$STATE_ACCOUNT" "$OPERATOR_IP"
 
 # Verify provider registrations; the owner reviews any required subscription change.
 for provider in Microsoft.App Microsoft.DBforPostgreSQL Microsoft.Network Microsoft.ManagedIdentity Microsoft.OperationalInsights Microsoft.KeyVault Microsoft.Storage; do
@@ -166,13 +191,51 @@ elif [ "$PHASE" -gt 0 ]; then
   fail 'Checkpointed resources are absent. Inspect protected state before continuing.'
 fi
 
-# Inspect only storage metadata. This script does not change an existing state store.
+# Bootstrap the state store using a separate, private local Terraform state.
+# AzAPI uses management-plane requests without listing account keys or reading secrets.
+state_exists="$(az group exists --name "$STATE_GROUP" --output tsv | tr '[:upper:]' '[:lower:]')"
+if [ "$state_exists" = true ]; then
+  [ "$(az group show --name "$STATE_GROUP" --query tags.fluxDeploymentId --output tsv)" = "$DEPLOY_ID" ] || fail 'The state resource group belongs to another deployment; nothing will be adopted.'
+  [ -s "$BOOT/terraform.tfstate" ] || fail 'Bootstrap state is missing. Restore .flux-deploy from its protected backup before proceeding.'
+elif [ "$(cfg bootstrap_complete)" = True ]; then
+  fail 'The checkpointed state resource group is absent; inspect bootstrap state before continuing.'
+fi
+if [ "$(cfg bootstrap_complete)" != True ]; then
+  mkdir -p "$BOOT"
+  cp "$ROOT/infra/bootstrap/main.tf" "$BOOT/main.tf"
+  cp "$ROOT/infra/bootstrap/.terraform.lock.hcl" "$BOOT/.terraform.lock.hcl"
+  python3 - "$CONFIG" "$BOOT/runtime.tfvars.json" <<'PY'
+import json,sys
+c=json.load(open(sys.argv[1])); d={k:c[v] for k,v in dict(subscription_id='subscription',deployment_id='deployment_id',resource_group_name='state_group',storage_account_name='state_account',operator_ip='operator_ip').items()}
+open(sys.argv[2],'w').write(json.dumps(d,indent=2)+'\n')
+PY
+  cd "$BOOT"
+  terraform init -input=false
+  terraform validate
+  plan="$WORK/state-bootstrap.tfplan"
+  terraform plan -input=false -var-file="$BOOT/runtime.tfvars.json" -out="$plan"
+  terraform show -json "$plan" | audit_plan bootstrap
+  hash_before="$(shasum -a 256 "$plan" | cut -d' ' -f1)"
+  confirm "Create the protected Central India state store for $APP?" "APPLY-$APP"
+  [ "$hash_before" = "$(shasum -a 256 "$plan" | cut -d' ' -f1)" ] || fail 'The bootstrap plan changed after review.'
+  terraform apply -input=false "$plan"
+  save bootstrap_complete true
+fi
+
+# Inspect only storage metadata, then wait for Entra RBAC/data-plane propagation.
 az storage account show --name "$STATE_ACCOUNT" --resource-group "$STATE_GROUP" --output json |
   python3 -c 'import json,sys; s=json.load(sys.stdin); ok=s.get("location")=="centralindia" and s.get("allowSharedKeyAccess") is False and s.get("allowBlobPublicAccess") is False and s.get("enableHttpsTrafficOnly") is True and s.get("minimumTlsVersion")=="TLS1_2" and s.get("networkRuleSet",{}).get("defaultAction")=="Deny"; sys.exit(0 if ok else "State storage must be in Central India, disable shared keys/public blobs, require HTTPS/TLS1.2 and restrict networks.")'
 az storage account blob-service-properties show --account-name "$STATE_ACCOUNT" --resource-group "$STATE_GROUP" --output json |
   python3 -c 'import json,sys; s=json.load(sys.stdin); sys.exit(0 if s.get("isVersioningEnabled") and s.get("deleteRetentionPolicy",{}).get("enabled") and s.get("containerDeleteRetentionPolicy",{}).get("enabled") else "Enable state Blob versioning and Blob/container soft delete first.")'
-az storage container show --account-name "$STATE_ACCOUNT" --name tfstate --auth-mode login --query properties.publicAccess --output tsv |
+state_ready=false
+for attempt in $(seq 1 60); do
+  if az storage container show --account-name "$STATE_ACCOUNT" --name tfstate --auth-mode login --query properties.publicAccess --output tsv 2>/dev/null |
   python3 -c 'import sys; sys.exit(0 if sys.stdin.read().strip().lower() in ["","none"] else "The tfstate container must be private.")'
+  then state_ready=true; break; fi
+  printf 'Waiting for state-store RBAC/network propagation...\n'
+  sleep 5
+done
+[ "$state_ready" = true ] || fail 'State access is not ready. Check subscription role-assignment permissions/network access and rerun to resume.'
 
 cd "$TF"
 terraform init -input=false -reconfigure \
@@ -190,7 +253,7 @@ stage() {
   python3 - "$CONFIG" "$WORK/runtime.tfvars.json" "$target" <<'PY'
 import json,sys
 c=json.load(open(sys.argv[1])); n=int(sys.argv[3]); d={'subscription_id':c['subscription'],'location':'centralindia','resource_group_name':c['group'],'app_name':c['app'],'backend_key_vault_name':c['vault'],'deployment_id':c['deployment_id'],'enable_backend':True,'provision_backend_database':n>=2,'deploy_backend_app':n>=4,'backend_image':c['image'] if n>=3 else None,'ghcr_private_image':True,'ghcr_username':c['ghcr_user'],'ghcr_token_secret_name':'ghcr-read-token','enable_tomtom':False,'key_vault_admin_ip_rules':[c['operator_ip']]}
-d.update(backend_allow_registration=False,backend_database_sku='B_Standard_B1ms',tomtom_secret_name='tomtom-api-key')
+d.update(backend_allow_registration=False,backend_database_sku='B_Standard_B1ms',tomtom_secret_name='tomtom-api-key',grant_operator_secret_access=True)
 open(sys.argv[2],'w').write(json.dumps(d,indent=2)+'\n')
 PY
   plan="$WORK/$name.tfplan"
@@ -205,7 +268,7 @@ PY
 }
 
 stage 1 foundation
-printf '\nIn Azure Portal, grant your operator Key Vault Secrets Officer on %s, then enter distinct 24+ character database-admin-password and database-app-password, plus ghcr-read-token (read:packages only). Enter values only in the Portal.\n' "$VAULT"
+printf '\nTerraform granted your operator Key Vault Secrets Officer on %s. In Azure Portal, enter distinct 24+ character database-admin-password and database-app-password, plus ghcr-read-token (read:packages only, owned by Wadat-sumi). Enter values only in the Portal.\n' "$VAULT"
 browser "https://portal.azure.com/#resource/subscriptions/$SUB/resourceGroups/$GROUP/providers/Microsoft.KeyVault/vaults/$VAULT/secrets"
 while :; do
   ask 'Press Enter after entering the three Key Vault secrets: '
