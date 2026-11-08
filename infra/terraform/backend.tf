@@ -142,6 +142,12 @@ resource "azurerm_container_app_environment" "backend" {
   log_analytics_workspace_id = azurerm_log_analytics_workspace.backend[0].id
   infrastructure_subnet_id   = azurerm_subnet.containers[0].id
   tags                       = merge(local.backend_tags, var.deployment_id == null ? {} : { fluxDeploymentId = var.deployment_id })
+  lifecycle {
+    # Azure fills this platform-managed name even when it is omitted at creation.
+    # AzureRM 4.6 treats its return to null as replacement (provider issue #27481).
+    # Retain Azure's name; continue checking all other environment attributes.
+    ignore_changes = [infrastructure_resource_group_name]
+  }
 }
 resource "azurerm_container_app_job" "migrate" {
   count                        = local.image_enabled ? 1 : 0

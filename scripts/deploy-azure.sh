@@ -19,6 +19,7 @@ BOOT="$WORK/bootstrap"
 REPO='https://github.com/Wadat-sumi/flux'
 REGION='centralindia'
 REPAIR_NETWORK=false
+PLAN_NETWORK=false
 
 fail() { printf '\nStopped: %s\n' "$*" >&2; exit 1; }
 ask() {
@@ -135,10 +136,12 @@ wait_network_registration() {
 
 case "${1:-}" in
   --help|-h)
-    printf 'Usage: bash scripts/deploy-azure.sh [--check | --repair-network | --check-config FILE | --audit-plan FILE]\nRun without flags for guided Central India deployment. --repair-network reviews recovery of an owned failed foundation. --audit-plan reads Terraform JSON from stdin.\n'
+    printf 'Usage: bash scripts/deploy-azure.sh [--check | --diagnose-network | --plan-network-repair | --repair-network | --check-config FILE | --audit-plan FILE]\nRun without flags for guided Central India deployment. --diagnose-network reads registration/permission metadata only. --plan-network-repair saves an owned foundation recovery plan without login, registration or apply; local edits are allowed for review. --repair-network reviews and applies recovery of an owned failed foundation. --audit-plan reads Terraform JSON from stdin.\n'
     exit 0 ;;
   --check-config) validate_config "${2:?Configuration path required}"; exit 0 ;;
   --audit-plan) CONFIG="${2:?Configuration path required}"; validate_config "$CONFIG"; audit_plan; exit 0 ;;
+  --diagnose-network) validate_config "$CONFIG"; command -v az >/dev/null 2>&1 || fail 'Azure CLI is required for read-only diagnostics.'; python3 "$ROOT/scripts/prepare-network-repair.py" diagnose "$CONFIG" -; exit 0 ;;
+  --plan-network-repair) REPAIR_NETWORK=true; PLAN_NETWORK=true ;;
   --repair-network) REPAIR_NETWORK=true ;;
   ''|--check) ;;
   *) fail 'Unknown argument; use --help.' ;;
@@ -154,7 +157,7 @@ esac
 terraform version -json | python3 -c 'import json,sys; v=json.load(sys.stdin)["terraform_version"]; p=tuple(int(x) for x in v.split("-")[0].split(".")); sys.exit(0 if (1,9,0)<=p<(2,0,0) else "Terraform 1.9–1.x is required.")'
 az version --output none
 if [ "${1:-}" = --check ]; then printf 'Local prerequisites pass. Target: Central India (centralindia). No login or cloud changes performed.\n'; exit 0; fi
-[ -z "$(git status --porcelain)" ] || fail 'Keep local edits safe; commit/stash them before deployment.'
+[ "$PLAN_NETWORK" = true ] || [ -z "$(git status --porcelain)" ] || fail 'Keep local edits safe; commit/stash them before deployment. Use --plan-network-repair to review a failed foundation with local fixes before committing.'
 [ ! -L "$WORK" ] || fail 'The deployment directory must not be a symlink.'
 mkdir -p "$WORK"
 chmod 700 "$WORK"
@@ -162,7 +165,11 @@ mkdir "$WORK/lock" 2>/dev/null || fail 'Another deployment or a stale lock exist
 trap 'rmdir "$WORK/lock" 2>/dev/null || true' EXIT
 trap 'printf "\nInterrupted. Resources may still be running; rerun the same command to resume.\n" >&2; exit 130' INT TERM
 
-if ! az account show --output none >/dev/null 2>&1; then az login --output none; fi
+if [ "$PLAN_NETWORK" = true ]; then
+  [ -f "$CONFIG" ] || fail 'A retained failed-foundation checkpoint is required for a recovery plan.'
+  validate_config "$CONFIG"
+  [ "$(az account show --query id --output tsv 2>/dev/null)" = "$(cfg subscription)" ] || fail 'Recovery planning requires an existing Azure CLI login in the saved subscription. No login or account change was attempted.'
+elif ! az account show --output none >/dev/null 2>&1; then az login --output none; fi
 if [ -f "$CONFIG" ] && [ "$(cfg schema)" != 2 ]; then
   # The previous prompt-only version may have saved an unprovisioned config.
   # Never discard a checkpoint or adopt manually created resources.
@@ -190,7 +197,7 @@ validate_config "$CONFIG"
 SUB="$(cfg subscription)"; APP="$(cfg app)"; GROUP="$(cfg group)"; VAULT="$(cfg vault)"
 STATE_GROUP="$(cfg state_group)"; STATE_ACCOUNT="$(cfg state_account)"; DEPLOY_ID="$(cfg deployment_id)"
 OPERATOR_IP="$(cfg operator_ip)"; PHASE="$(cfg phase)"
-az account set --subscription "$SUB"
+[ "$PLAN_NETWORK" = true ] || az account set --subscription "$SUB"
 export ARM_SUBSCRIPTION_ID="$SUB" ARM_USE_CLI=true
 if [ "$REPAIR_NETWORK" = true ]; then
   [ "$PHASE" = 0 ] && [ "$(cfg bootstrap_complete)" = True ] && [ -s "$BOOT/terraform.tfstate" ] && [ -z "$(cfg image)" ] && [ -z "$(cfg execution)" ] || fail 'Network repair is restricted to a failed foundation with retained bootstrap state and no database/image/application stage.'
@@ -208,7 +215,7 @@ if [ "$REPAIR_NETWORK" = true ]; then
 elif [ "$(cfg revision)" != "$(git rev-parse HEAD)" ]; then
   # A provider-registration interruption precedes any Terraform resources. Allow
   # a script fix only after proving that this checkpoint has no infrastructure.
-  [ "$PHASE" = 0 ] && [ "$(cfg bootstrap_complete)" = False ] && [ ! -e "$BOOT/terraform.tfstate" ] && [ ! -e "$BOOT/terraform.tfstate.backup" ] || fail 'The checkout changed after infrastructure work began. Resume its original commit; no checkpoint will be discarded.'
+  [ "$PHASE" = 0 ] && [ "$(cfg bootstrap_complete)" = False ] && [ ! -e "$BOOT/terraform.tfstate" ] && [ ! -e "$BOOT/terraform.tfstate.backup" ] || fail 'The checkout changed after infrastructure work began. For a failed phase-0 foundation, use --plan-network-repair, then --repair-network after review. Otherwise resume its original commit; no checkpoint will be discarded.'
   for group in "$GROUP" "$STATE_GROUP"; do
     [ "$(az group exists --name "$group" --output tsv | tr '[:upper:]' '[:lower:]')" = false ] || fail 'The checkout changed and resources already exist. Resume its original commit; nothing will be adopted or discarded.'
   done
@@ -225,6 +232,7 @@ for provider in Microsoft.App Microsoft.DBforPostgreSQL Microsoft.Network Micros
   printf 'Checking %s registration...\n' "$provider"
   status="$(provider_cli show "$provider")"
   if [ "$status" = NotRegistered ]; then
+    [ "$PLAN_NETWORK" = false ] || fail 'A required provider is not registered. Plan-only recovery never registers providers; review registration separately.'
     confirm "Register $provider in this subscription?" REGISTER
     printf 'Submitting %s registration (request timeout: 45 seconds)...\n' "$provider"
     provider_cli register "$provider"
@@ -334,6 +342,10 @@ PY
   terraform plan -input=false -var-file="$WORK/runtime.tfvars.json" -out="$plan"
   terraform show -json "$plan" | audit_plan
   hash_before="$(shasum -a 256 "$plan" | cut -d' ' -f1)"
+  if [ "$PLAN_NETWORK" = true ]; then
+    printf '\nRecovery plan prepared: %s\nSHA-256: %s\nNo Terraform apply, login, provider registration or checkpoint update was performed. After reviewing and committing the fixes, run bash scripts/deploy-azure.sh --repair-network to prepare and approve a fresh plan.\n' "$plan" "$hash_before"
+    exit 0
+  fi
   confirm "Apply this saved $name plan for $APP?" "APPLY-$APP"
   [ "$hash_before" = "$(shasum -a 256 "$plan" | cut -d' ' -f1)" ] || fail 'The saved plan changed after review.'
   terraform apply -input=false "$plan"

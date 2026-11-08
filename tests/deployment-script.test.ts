@@ -147,6 +147,9 @@ function mockedDeployment(
     badRepairStatus?: boolean;
     repairInspectionFailure?: boolean;
     absentResponse?: string;
+    dirty?: boolean;
+    loggedOut?: boolean;
+    wrongSubscription?: boolean;
   } = {},
 ) {
   const root = temp();
@@ -215,9 +218,10 @@ import fs from 'node:fs';import path from 'node:path';
 const root=process.env.FLUX_TEST_ROOT,a=process.argv.slice(2),tool=path.basename(process.argv[1]),key=a.join(' ');
 fs.appendFileSync(root+'/commands.jsonl',JSON.stringify({tool,args:a})+'\\n');
 const out=v=>{process.stdout.write(typeof v==='string'?v+'\\n':JSON.stringify(v)+'\\n');process.exit(0)},c=fs.existsSync(root+'/.flux-deploy/config.json')?JSON.parse(fs.readFileSync(root+'/.flux-deploy/config.json')):null;
-if(tool==='git'){if(key==='remote get-url origin')out('https://github.com/Wadat-sumi/flux.git');if(key==='branch --show-current')out('main');if(key==='status --porcelain'||key.startsWith('merge-base --is-ancestor'))out('');if(key==='rev-parse HEAD')out((process.env.FLUX_TEST_REVISION_CHANGED?'b':'a').repeat(40));}
+if(tool==='git'){if(key==='remote get-url origin')out('https://github.com/Wadat-sumi/flux.git');if(key==='branch --show-current')out('main');if(key==='status --porcelain')out(process.env.FLUX_TEST_DIRTY?' M scripts/deploy-azure.sh':'');if(key.startsWith('merge-base --is-ancestor'))out('');if(key==='rev-parse HEAD')out((process.env.FLUX_TEST_REVISION_CHANGED?'b':'a').repeat(40));}
 if(tool==='az'){
- if(key.startsWith('account show')||key.startsWith('account set')||key.startsWith('version'))out('');
+ if(key.startsWith('account show')){if(process.env.FLUX_TEST_LOGGED_OUT){process.stderr.write('SENTINEL_SECRET');process.exit(1);}if(a.includes('id'))out(process.env.FLUX_TEST_WRONG_SUBSCRIPTION?'33333333-3333-4333-8333-333333333333':c?.subscription);out('');}
+ if(key.startsWith('account set')||key.startsWith('version'))out('');
  if(key.startsWith('account list'))out('Fixture subscription');
  if(key.startsWith('provider show')){if(a.includes('registrationState')){
   const mode=process.env.FLUX_TEST_PROVIDER_MODE;
@@ -307,6 +311,9 @@ process.stderr.write('Unexpected mock command: '+tool+' '+key);process.exit(3);
     ...(options.absentResponse
       ? { FLUX_TEST_ABSENT_RESPONSE: options.absentResponse }
       : {}),
+    ...(options.dirty ? { FLUX_TEST_DIRTY: "1" } : {}),
+    ...(options.loggedOut ? { FLUX_TEST_LOGGED_OUT: "1" } : {}),
+    ...(options.wrongSubscription ? { FLUX_TEST_WRONG_SUBSCRIPTION: "1" } : {}),
   };
   const execute = (input: string, args: string[] = []) =>
     spawnSync("/bin/bash", [join(root, "scripts/deploy-azure.sh"), ...args], {
@@ -889,3 +896,135 @@ test("authorization inspection failure identifies the resource and code, never t
       ),
   ).toBe(false);
 });
+
+test("plan-only recovery reviews local fixes without cloud mutations or advancing the checkpoint", () => {
+  const f = mockedDeployment({
+    repair: true,
+    revisionChanged: true,
+    dirty: true,
+    existingEnvironment: true,
+  });
+  const checkpoint = join(f.root, ".flux-deploy/config.json"),
+    before = readFileSync(checkpoint, "utf8"),
+    r = f.execute("", ["--plan-network-repair"]);
+  expect(r.status, r.stdout + r.stderr).toBe(0);
+  expect(r.stdout).toContain("Recovery plan prepared:");
+  expect(r.stdout).toMatch(/SHA-256: [a-f0-9]{64}/);
+  expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+  expect(readFileSync(checkpoint, "utf8")).toBe(before);
+  expect(existsSync(join(f.root, ".flux-deploy/foundation.tfplan"))).toBe(true);
+  expect(
+    f
+      .commands()
+      .some((c) =>
+        c.tool === "terraform"
+          ? ["apply", "import", "destroy"].includes(c.args[0])
+          : c.tool === "az" &&
+            [
+              "login",
+              "account set",
+              "provider register",
+              "containerapp job start",
+            ].some((prefix) => c.args.join(" ").startsWith(prefix)),
+      ),
+  ).toBe(false);
+  expect(f.commands().some((c) => c.tool === "open")).toBe(false);
+});
+
+test.each([
+  { loggedOut: true },
+  { wrongSubscription: true },
+  { foreign: true },
+  { progressed: true },
+  { providerMode: "register" },
+  { destructive: true },
+])(
+  "plan-only recovery refuses unsafe context %j without changes",
+  (options) => {
+    const f = mockedDeployment({ repair: true, ...options }),
+      checkpoint = join(f.root, ".flux-deploy/config.json"),
+      before = readFileSync(checkpoint, "utf8"),
+      r = f.execute("", ["--plan-network-repair"]);
+    expect(r.status).not.toBe(0);
+    expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+    expect(readFileSync(checkpoint, "utf8")).toBe(before);
+    expect(
+      f
+        .commands()
+        .some((c) =>
+          c.tool === "terraform"
+            ? ["apply", "import", "destroy"].includes(c.args[0])
+            : c.tool === "az" &&
+              [
+                "login",
+                "account set",
+                "provider register",
+                "containerapp job start",
+              ].some((prefix) => c.args.join(" ").startsWith(prefix)),
+        ),
+    ).toBe(false);
+  },
+);
+
+test("normal deployment preserves local edits and directs failed foundations to recovery review", () => {
+  const dirty = mockedDeployment({ dirty: true }),
+    r = dirty.execute("");
+  expect(r.status).not.toBe(0);
+  expect(r.stderr).toContain("--plan-network-repair");
+  expect(
+    dirty.commands().some((c) => c.tool === "az" && c.args[0] !== "version"),
+  ).toBe(false);
+  const pinned = mockedDeployment({ repair: true, revisionChanged: true }),
+    p = pinned.execute("");
+  expect(p.status).not.toBe(0);
+  expect(p.stderr).toContain("--plan-network-repair, then --repair-network");
+});
+
+test.each([
+  ["grants", "ROLE_GRANTS_PRESENT_SERVICE_AUTH_UNVERIFIED"],
+  ["excluded", "REQUIRED_RBAC_GRANT_MISSING"],
+  ["mismatch", "SUBSCRIPTION_CONTEXT_MISMATCH"],
+  ["unregistered", "NETWORK_REGISTRATION_NOT_COMPLETE"],
+  ["failed", "LOGIN_OR_CONTEXT_UNVERIFIED"],
+  ["paginated", "UNVERIFIED"],
+])(
+  "network diagnostics report %s with secret-safe read-only requests",
+  (mode, expected) => {
+    const r = spawnSync(
+      "python3",
+      [
+        "-c",
+        `
+import json,runpy,sys
+m=runpy.run_path(sys.argv[1]); mode=sys.argv[2]; c=json.load(sys.stdin); calls=[]
+def fake(args):
+ calls.append(args)
+ if args[0]=='account':
+  if mode=='failed': return None,m['error_code']('ERROR: (AuthorizationFailed) SENTINEL_SECRET')
+  return {'subscription':'other' if mode=='mismatch' else c['subscription'],'identityType':'user'},None
+ if args[0]=='provider': return ('Registering' if mode=='unregistered' else 'Registered'),None
+ if args[0]=='monitor': return [{'correlationId':'SENTINEL_SECRET'},{'correlationId':'11111111-1111-4111-8111-111111111111'}],None
+ url=args[args.index('--url')+1]
+ if '/permissions?' in url:
+  return {'entries':[{'actions':['Microsoft.Network/*'],'notActions':['Microsoft.Network/*/action'] if mode=='excluded' else []}],'nextLink':'SENTINEL_SECRET' if mode=='paginated' else None},None
+ return {'id':url.removeprefix('https://management.azure.com').split('?')[0],'state':'Succeeded'},None
+m['diagnose_authorization'].__globals__['diagnostic_json']=fake
+report=m['diagnose_authorization'](c)
+assert all(a[0] in ['account','provider','rest','monitor'] for a in calls)
+assert all(a[a.index('--method')+1]=='get' for a in calls if a[0]=='rest')
+assert all(a[1]!='register' for a in calls if a[0]=='provider')
+print(json.dumps(report))
+`,
+        resolve("scripts/prepare-network-repair.py"),
+        mode,
+      ],
+      {
+        encoding: "utf8",
+        input: JSON.stringify(config),
+      },
+    );
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout).result).toBe(expected);
+    expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+  },
+);

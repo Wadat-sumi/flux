@@ -32,6 +32,22 @@ The script is locally tested with mocked cloud tools and plan/configuration fixt
 
 ## Recover the failed foundation network apply
 
+To inspect the saved subscription's Network registration and role grants without logging in or changing cloud resources, run:
+
+```sh
+bash scripts/deploy-azure.sh --diagnose-network
+```
+
+This uses the existing Azure CLI identity and reports only allowlisted metadata. Present role grants do not prove that deny assignments, conditional access or Azure service authorization will allow a create request.
+
+To review local script fixes against the retained foundation before committing or applying them, run:
+
+```sh
+bash scripts/deploy-azure.sh --plan-network-repair
+```
+
+This requires an existing CLI login in the saved subscription, completed bootstrap and the same ownership/state checks as recovery. It permits local edits for review, writes a private recovery workspace and saved foundation plan under ignored `.flux-deploy/`, and prints the plan SHA-256. Terraform reads the existing resources and locks the remote state while planning; it does not apply the plan, register providers, change the CLI account, log in, enter later stages or advance the deployment checkpoint. An unregistered provider, unsafe resource or destructive plan stops the command. Keep the saved plan private. After reviewing and committing the tested fixes, `--repair-network` prepares a fresh plan and requests approval before applying it.
+
 For the reported `NotAuthorized` DNS link and `ManagedEnvironmentSubnetDelegationError`, update the checkout and run the explicit recovery mode:
 
 ```sh
@@ -41,6 +57,8 @@ git pull --ff-only origin main && bash scripts/deploy-azure.sh --repair-network
 The Container Apps subnet now delegates to `Microsoft.App/environments`; the PostgreSQL subnet keeps its separate delegation. The environment depends on that subnet update. Recovery is restricted to phase 0 with completed bootstrap, retained bootstrap state, no image/migration checkpoint, ancestor source revision, both resource groups carrying the saved deployment UUID and the protected application state carrying the same resource-group anchor. Normal progressed deployments remain pinned to their original commit.
 
 Recovery metadata uses authenticated, read-only `az rest --method get` calls to the exact ARM resource IDs and pinned API versions. Missing-resource responses (`NotFound`, `ResourceNotFound`, `ParentResourceNotFound`) proceed to a reviewed create plan. Authorization, registration/API, CLI and unknown errors stop and print only the fixed resource address, an allowlisted error code and CLI exit number; raw response/error text and credential-bearing URLs are never printed. A generic earlier inspection failure does not establish that permissions are missing. [Azure CLI REST authentication](https://learn.microsoft.com/en-us/cli/azure/use-azure-cli-rest-command).
+
+A live recovery plan on 8 November 2026 reproduced replacement of an otherwise healthy environment because Azure had populated `infrastructure_resource_group_name` while the configuration omitted it. The pinned AzureRM provider treats that difference as replacement ([provider issue #27481](https://github.com/hashicorp/terraform-provider-azurerm/issues/27481)). The environment lifecycle now retains only this platform-managed field with `ignore_changes`; all other attributes and the script's prohibition on deletion/replacement remain enforced. The repeated authenticated plan at 14:50 UTC passed: **one DNS-link creation, eleven unchanged resources, no updates/replacements/deletions**. This verifies planning against the existing foundation, not a successful DNS create or application deployment. The absent DNS link must still be created by an approved foundation apply.
 
 A private `.flux-deploy/network-repair` copy uses the **same protected remote application state**. Only the exact configured DNS link and environment are inspected. If an object from the failed creation exists outside Terraform state, its ID, terminal provisioning state and VNet/subnet reference must match before an import block is prepared. Imports and ownership-tag updates appear in the saved foundation plan; no import or cloud change happens until plan approval. The tag updates retry failed resources in place. Deletions/replacements, foreign resources and still-changing objects are rejected. No `state rm`, standalone import, destroy, reset or forced replacement is used. A successful foundation apply atomically advances the phase and source revision; failure/decline keeps the old checkpoint.
 

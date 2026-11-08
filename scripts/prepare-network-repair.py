@@ -4,6 +4,8 @@ import os
 import re
 import subprocess
 import sys
+import fnmatch
+import uuid
 from pathlib import Path
 
 MISSING_CODES = {"NotFound", "ResourceNotFound", "ParentResourceNotFound"}
@@ -74,6 +76,100 @@ def write_private(path, value):
     path.chmod(0o600)
 
 
+def role_grants(entries, action):
+    """Check role grants, not deny assignments or service-side authorization."""
+    if not isinstance(entries, list):
+        return "unknown"
+    valid = True
+    for entry in entries:
+        if not isinstance(entry, dict):
+            valid = False
+            continue
+        allows, excludes = entry.get("actions"), entry.get("notActions", [])
+        if not isinstance(allows, list) or not isinstance(excludes, list) or not all(isinstance(x, str) for x in allows + excludes):
+            valid = False
+            continue
+        matches = lambda patterns: any(fnmatch.fnmatchcase(action.lower(), p.lower()) for p in patterns)
+        if matches(allows) and not matches(excludes):
+            return "present"
+    return "missing" if valid else "unknown"
+
+
+def diagnostic_json(args):
+    try:
+        result = subprocess.run(["az", *args, "--output", "json", "--only-show-errors"],
+                                capture_output=True, text=True, timeout=45)
+    except subprocess.TimeoutExpired:
+        return None, "TimedOut"
+    if result.returncode:
+        return None, error_code(result.stderr or result.stdout)
+    try:
+        return json.loads(result.stdout), None
+    except ValueError:
+        return None, "InvalidJson"
+
+
+def diagnose_authorization(config):
+    report = {"mode": "read-only", "result": "UNVERIFIED"}
+    context, code = diagnostic_json(["account", "show", "--query", "{subscription:id,identityType:user.type}"])
+    if code or not isinstance(context, dict):
+        report.update(result="LOGIN_OR_CONTEXT_UNVERIFIED", azure_code=code or "InvalidMetadata")
+        return report
+    report["subscription_matches_config"] = str(context.get("subscription", "")).lower() == config["subscription"].lower()
+    report["cli_identity_type"] = context.get("identityType") if context.get("identityType") in ["user", "servicePrincipal", "managedIdentity"] else "unknown"
+    if not report["subscription_matches_config"]:
+        report["result"] = "SUBSCRIPTION_CONTEXT_MISMATCH"
+        return report
+    registration, code = diagnostic_json(["provider", "show", "--namespace", "Microsoft.Network", "--query", "registrationState"])
+    report["network_registration"] = registration if registration in ["Registered", "Registering", "NotRegistered", "Unregistering"] else "unknown"
+    if code:
+        report.update(result="REGISTRATION_UNVERIFIED", azure_code=code)
+        return report
+    prefix = f"/subscriptions/{config['subscription']}/resourceGroups/{config['group']}/providers/Microsoft.Network/"
+    vnet = prefix + f"virtualNetworks/{config['app']}-vnet"
+    zone = prefix + f"privateDnsZones/{config['app']}.postgres.database.azure.com"
+    metadata, code = diagnostic_json(["rest", "--method", "get", "--url", "https://management.azure.com" + vnet + "?api-version=2024-01-01",
+                                      "--query", "{id:id,state:properties.provisioningState}"])
+    if code or not isinstance(metadata, dict) or str(metadata.get("id", "")).lower() != vnet.lower():
+        report.update(result="VNET_INSPECTION_UNVERIFIED", azure_code=code or "InvalidMetadata")
+        return report
+    report["vnet_provisioning_state"] = metadata.get("state") if metadata.get("state") in ["Succeeded", "Failed", "Updating", "Deleting"] else "unknown"
+    for label, resource, action in [
+        ("vnet_join_grant", vnet, "Microsoft.Network/virtualNetworks/join/action"),
+        ("dns_link_write_grant", zone, "Microsoft.Network/privateDnsZones/virtualNetworkLinks/write"),
+    ]:
+        permission, code = diagnostic_json(["rest", "--method", "get", "--url", "https://management.azure.com" + resource + "/providers/Microsoft.Authorization/permissions?api-version=2022-04-01",
+                                             "--query", "{entries:value[].{actions:actions,notActions:notActions},nextLink:nextLink}"])
+        if code or not isinstance(permission, dict) or permission.get("nextLink"):
+            report[label] = "unknown"
+            if code:
+                report[label + "_azure_code"] = code
+        else:
+            report[label] = role_grants(permission.get("entries"), action)
+    activity, code = diagnostic_json(["monitor", "activity-log", "list", "--resource-id", zone + "/virtualNetworkLinks/flux-database", "--status", "Failed", "--offset", "2h",
+                                     "--query", "[].{correlationId:correlationId}"])
+    correlations = []
+    if isinstance(activity, list):
+        for entry in activity:
+            try:
+                value = str(uuid.UUID(entry["correlationId"]))
+                if value not in correlations:
+                    correlations.append(value)
+            except (ValueError, KeyError, TypeError, AttributeError):
+                continue
+    report["failure_correlation_ids"] = correlations[:3]
+    if code:
+        report["activity_log_azure_code"] = code
+    if report["network_registration"] != "Registered":
+        report["result"] = "NETWORK_REGISTRATION_NOT_COMPLETE"
+    elif "missing" in [report.get("vnet_join_grant"), report.get("dns_link_write_grant")]:
+        report["result"] = "REQUIRED_RBAC_GRANT_MISSING"
+    elif report.get("vnet_join_grant") == "present" and report.get("dns_link_write_grant") == "present":
+        report["result"] = "ROLE_GRANTS_PRESENT_SERVICE_AUTH_UNVERIFIED"
+    report["note"] = "Role grants do not establish deny-assignment, conditional-access or Azure service authorization readiness. No changes were made."
+    return report
+
+
 def state_addresses(config, state):
     def resources(module):
         yield from module.get("resources", [])
@@ -142,7 +238,9 @@ if __name__ == "__main__":
     os.umask(0o077)
     action, config_path, output, *extra = sys.argv[1:]
     config = json.loads(Path(config_path).read_text())
-    if action == "state":
+    if action == "diagnose":
+        print(json.dumps(diagnose_authorization(config), indent=2))
+    elif action == "state":
         try:
             addresses = state_addresses(config, json.load(sys.stdin))
         except (ValueError, KeyError, TypeError, AttributeError):
