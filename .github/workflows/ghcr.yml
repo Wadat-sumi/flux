@@ -1,0 +1,68 @@
+name: Verify and publish Flux OCI image
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified image to GHCR (does not deploy Azure)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flux-ghcr-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'Wadat-sumi/flux' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: .tools/ms-playwright
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.12.0
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check
+      - run: npm run build
+      - run: npm run test:e2e
+      - run: npm run test:browser-worker
+      - run: npm run test:load
+      - run: npm run secrets:check
+      - run: npm audit --audit-level=low
+
+  image:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install daemon-free OCI tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes buildah podman
+      - name: Build and smoke-test the Linux image
+        env:
+          FLUX_IMAGE_NAME: ghcr.io/wadat-sumi/flux
+        run: bash scripts/ghcr-image.sh build
+      - name: Publish immutable image
+        if: inputs.publish
+        env:
+          FLUX_IMAGE_NAME: ghcr.io/wadat-sumi/flux
+          # Automatically minted job credential, not a stored application secret.
+          GHCR_PUBLISH_TOKEN: ${{ github.token }}
+        run: bash scripts/ghcr-image.sh publish

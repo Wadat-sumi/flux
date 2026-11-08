@@ -32,7 +32,7 @@ Final full-stack gate: **219 headless tests + 26 built-app browser tests + 2 iso
 | Responsive/accessibility | Laptop, tablet and phone widths, no horizontal overflow, native labeled forms, keyboard navigation and dialog Escape | Production browser tests; actual accessibility-tree inspection |
 | Security/AI guardrails | Hostile imports/labels/storage rejected or inert; no outbound attacker requests, script execution or AI/tool bridge | Core adversarial tests, five production security cases and security.md |
 | Performance | Real rendering plus worker and live metrics with 500+ on-road agents in two topologies | Measured browser JSON reports, summarized below |
-| Terraform | Container Apps + private PostgreSQL + Key Vault/managed identities/ACR/migration job, staged off by default; no unused SWA token | fmt/validate, lockfile, source/secret review; Azure plan/apply deferred |
+| Terraform | Container Apps + private PostgreSQL + Key Vault/managed identities/GHCR pull references/migration job, staged off by default; no unused SWA token | fmt/validate, lockfile, source/secret review; Azure plan/apply deferred |
 | Azure plan/apply/public URL | **Deferred, not verified** | Owner's instruction; deployment.md joint-review checklist |
 
 ## Issues found and corrected
@@ -64,7 +64,7 @@ The live editor screenshot in screenshots/audit-editor.png records the restored 
 
 ## Full-stack expansion verification
 
-Accounts/session restore/revocation, owner-scoped server scenarios/datasets/jobs, retained raw imports/provenance, real OSM projection, observed OD rate conversion, separate server workers, deterministic/paired results, progress/cancellation/timeout/restart and report downloads pass unit/integration/browser checks. All real integration secrets are vault-derived; no live secrets are needed by local persistence/tests. Database role permissions and the production pg driver are exercised locally. Terraform now includes private PostgreSQL, Container Apps, ACR, Key Vault and separate runtime/migration identities with staged provisioning.
+Accounts/session restore/revocation, owner-scoped server scenarios/datasets/jobs, retained raw imports/provenance, real OSM projection, observed OD rate conversion, separate server workers, deterministic/paired results, progress/cancellation/timeout/restart and report downloads pass unit/integration/browser checks. All real integration secrets are vault-derived; no live secrets are needed by local persistence/tests. Database role permissions and the production pg driver are exercised locally. Terraform now includes private PostgreSQL, Container Apps, GHCR pull references, Key Vault and separate runtime/migration identities with staged provisioning.
 
 The final 120-user run follows complete backend/UI integration and final boundary fixes: 10,963 mixed requests, 542.68 requests/s, p95 25.28 ms, zero unexpected errors over 20.20 s; 120 real scrypt logins had p95 5.06 s. Admission accepts 20 jobs and returns 100 expected overload rejections while one CPU worker runs. Exact scope/host and metrics are in testing.md and benchmarks/backend-120-users.json. This does not establish cloud capacity or calibrated traffic accuracy.
 

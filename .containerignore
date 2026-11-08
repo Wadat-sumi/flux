@@ -1,0 +1,19 @@
+# Buildah context excludes local data, credentials, state and development artifacts.
+node_modules
+dist
+dist-server
+.git
+.tools
+.flux-data
+.env
+.env.*
+*.jsonl
+test-results
+playwright-report
+infra
+docs
+tests
+.github
+**/*.tfstate*
+**/*.tfvars
+**/*.tfplan

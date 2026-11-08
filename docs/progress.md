@@ -157,3 +157,11 @@ The owner explicitly deferred Azure login/deployment to a joint review on 6 Nove
 - Native preview verified all six percentages and 3D vehicles at 60 s. No real secrets, Azure changes, external code-generation/other agents or raw-log edits.
 - Clock 2026-11-07T22:16:26.138731+05:30, elapsed 47.91 h; 12.09 h to internal target and 24.09 h to hard deadline. Original start/deadlines unchanged.
 - Owner now prioritizes using the researched real data step by step. Begin with the real JC Road geometry and map/source-sink audit; suitable permitted OD/control observations still need preparation/acquisition.
+
+
+## Owner-run macOS deployment with GHCR
+
+- Owner chose GHCR and no Docker tooling, then confirmed Azure CLI/Terraform are installed in their Antigravity macOS terminal. Removed the unprovisioned ACR/AcrPull path; added digest-pinned private/public GHCR pulls, secret-scoped Key Vault references and protected Blob backend configuration. Private pull tokens are entered only in the Portal; GitHub publication uses its ephemeral job identity token.
+- Added Containerfile/.containerignore and a manual-only GitHub Buildah/Podman verification/build/smoke/optional-publish workflow. No hosted job/image publication was run. Supplied the staged copyable deploy-mac-ghcr.md runbook, including state/RBAC setup, protected plans, Portal credentials, migration success and HTTPS verification.
+- Required application gate passes **391 cases**, plus **13 local Terraform mock-plan cases**, format/schema/shell/YAML checks, packaging-context compilation, credential scan and zero dependency advisories. Repeated 120-user workload: 11,226 requests/20.20 s, p95 20.65 ms, zero unexpected errors; 20 admitted/100 expected 429/one worker. Full scope and unverified cloud/image boundaries are in testing.md.
+- No Azure identity/provisioning, real secrets, other coding agents or raw-log edits. Clock 2026-11-08T15:11:18.096551+05:30, 64.82 h from original start. Internal 60 h target exceeded by 4.82 h; 7.18 h to hard deadline. No reset of the continuous session/deadlines.

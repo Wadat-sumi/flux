@@ -30,8 +30,8 @@ variable "app_name" {
   type        = string
   default     = "flux-quest"
   validation {
-    condition     = can(regex("^flux-[a-z0-9-]{2,23}$", var.app_name))
-    error_message = "Use a flux-prefixed lowercase name of at most 28 characters; the API suffix must fit Container Apps limits."
+    condition     = length(var.app_name) <= 24 && can(regex("^flux-[a-z0-9][a-z0-9-]*[a-z0-9]$", var.app_name)) && !strcontains(var.app_name, "--")
+    error_message = "Use a flux-prefixed lowercase name of 7–24 characters, ending in an alphanumeric with no double hyphens; the migration-job suffix must fit the 32-character limit."
   }
 }
 
@@ -46,18 +46,37 @@ variable "deploy_backend_app" {
   default     = false
 }
 variable "backend_image" {
-  description = "Tested ACR image reference, preferably pinned by digest. Null creates infrastructure only."
+  description = "Tested ghcr.io/wadat-sumi/flux image pinned by SHA-256 digest. Null creates infrastructure only."
   type        = string
   default     = null
   nullable    = true
-}
-variable "backend_registry_name" {
-  description = "Globally unique lowercase alphanumeric Azure Container Registry name."
-  type        = string
-  default     = "fluxquestregistry"
   validation {
-    condition     = can(regex("^flux[a-z0-9]{5,45}$", var.backend_registry_name))
-    error_message = "Use a globally unique lowercase alphanumeric flux-prefixed registry name."
+    condition     = var.backend_image == null || can(regex("^ghcr\\.io/wadat-sumi/flux@sha256:[a-f0-9]{64}$", var.backend_image))
+    error_message = "Use the immutable ghcr.io/wadat-sumi/flux@sha256:<64 lowercase hex> reference reported by the image workflow."
+  }
+}
+variable "ghcr_private_image" {
+  description = "Private GHCR packages use a Key Vault-backed read-only pull token. False requires an explicitly public image."
+  type        = bool
+  default     = true
+}
+variable "ghcr_username" {
+  description = "Non-secret GitHub username owning the read-only package token; the token value belongs only in Key Vault."
+  type        = string
+  default     = null
+  nullable    = true
+  validation {
+    condition     = var.ghcr_username == null || can(regex("^[A-Za-z0-9][A-Za-z0-9-]{0,38}$", var.ghcr_username))
+    error_message = "Use a GitHub username without credentials, URLs or whitespace."
+  }
+}
+variable "ghcr_token_secret_name" {
+  description = "Key Vault secret NAME containing the private GHCR read:packages token. Terraform never reads the token value."
+  type        = string
+  default     = "ghcr-read-token"
+  validation {
+    condition     = can(regex("^ghcr-[A-Za-z0-9-]{1,122}$", var.ghcr_token_secret_name))
+    error_message = "Use a ghcr-prefixed Key Vault secret name, not a token value or database-secret name."
   }
 }
 variable "backend_database_sku" {

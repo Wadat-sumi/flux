@@ -1,21 +1,21 @@
 {
-  "measuredAt": "2026-11-07T16:45:19.463Z",
+  "measuredAt": "2026-11-08T09:39:00.755Z",
   "users": 120,
   "distinctAuthenticatedSessions": 120,
-  "steadySeconds": 20.181622792,
+  "steadySeconds": 20.204416166999998,
   "workload": "120 concurrent HTTP clients: real password login; separate owned scenario with six vehicle profiles (40/20/10/10/10/10 synthetic mix); 20 s paced read/update/job-list/session mix; simultaneous mixed-vehicle job admission; health checks under CPU worker load; cancellation",
   "database": "Filesystem-persistent PGlite (embedded PostgreSQL); Azure managed PostgreSQL not measured",
-  "steadyRequests": 11373,
-  "requestsPerSecond": 563.5324828540677,
+  "steadyRequests": 11226,
+  "requestsPerSecond": 555.6211031890888,
   "unexpectedErrors": 0,
   "latencyMs": {
-    "p50": 6.348124999998618,
-    "p95": 29.629374999998618,
-    "p99": 52.96637499999997,
-    "max": 70.29116700000304
+    "p50": 9.912707999999839,
+    "p95": 20.647415999999794,
+    "p99": 35.33558300000004,
+    "max": 55.56224999999995
   },
-  "loginP95Ms": 5760.7325,
-  "healthUnderWorkerP95Ms": 0.7995410000003176,
+  "loginP95Ms": 5379.96825,
+  "healthUnderWorkerP95Ms": 0.3254579999993439,
   "jobAdmission": {
     "accepted": 20,
     "expectedOverload429": 100,
@@ -27,6 +27,6 @@
     "logicalCpus": 10,
     "memoryGiB": 24
   },
-  "durationSeconds": 26.303022333999998,
+  "durationSeconds": 25.8896255,
   "limits": "Loopback API concurrency, not 120 browsers or 120 simultaneous simulations. One bounded CPU worker, 20 active queue slots. No commercial provider calls."
 }

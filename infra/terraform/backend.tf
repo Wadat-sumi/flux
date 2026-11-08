@@ -1,9 +1,11 @@
 locals {
-  database_enabled = var.enable_backend && var.provision_backend_database
-  backend_tags     = { project = "flux", managed_by = "terraform" }
-  backend_image    = var.backend_image == null ? "unused" : var.backend_image
-  runtime_url      = local.database_enabled ? "postgresql://flux_app:${replace(urlencode(data.azurerm_key_vault_secret.database_app_password[0].value), "+", "%20")}@${azurerm_postgresql_flexible_server.backend[0].fqdn}:5432/flux?sslmode=verify-full" : null
-  migration_url    = local.database_enabled ? "postgresql://flux_admin:${replace(urlencode(data.azurerm_key_vault_secret.database_admin_password[0].value), "+", "%20")}@${azurerm_postgresql_flexible_server.backend[0].fqdn}:5432/flux?sslmode=verify-full" : null
+  database_enabled  = var.enable_backend && var.provision_backend_database
+  image_enabled     = local.database_enabled && var.backend_image != null
+  ghcr_auth_enabled = local.image_enabled && var.ghcr_private_image
+  backend_tags      = { project = "flux", managed_by = "terraform" }
+  backend_image     = var.backend_image == null ? "unused" : var.backend_image
+  runtime_url       = local.database_enabled ? "postgresql://flux_app:${replace(urlencode(data.azurerm_key_vault_secret.database_app_password[0].value), "+", "%20")}@${azurerm_postgresql_flexible_server.backend[0].fqdn}:5432/flux?sslmode=verify-full" : null
+  migration_url     = local.database_enabled ? "postgresql://flux_admin:${replace(urlencode(data.azurerm_key_vault_secret.database_admin_password[0].value), "+", "%20")}@${azurerm_postgresql_flexible_server.backend[0].fqdn}:5432/flux?sslmode=verify-full" : null
 }
 
 resource "azurerm_virtual_network" "backend" {
@@ -108,27 +110,12 @@ resource "azurerm_postgresql_flexible_server_database" "backend" {
   charset   = "UTF8"
   collation = "en_US.utf8"
 }
-resource "azurerm_container_registry" "backend" {
-  count               = var.enable_backend ? 1 : 0
-  name                = var.backend_registry_name
-  resource_group_name = azurerm_resource_group.flux.name
-  location            = azurerm_resource_group.flux.location
-  sku                 = "Basic"
-  admin_enabled       = false
-  tags                = local.backend_tags
-}
 resource "azurerm_user_assigned_identity" "backend" {
   count               = var.enable_backend ? 1 : 0
-  name                = "${var.app_name}-image-pull"
+  name                = "${var.app_name}-runtime"
   location            = azurerm_resource_group.flux.location
   resource_group_name = azurerm_resource_group.flux.name
   tags                = local.backend_tags
-}
-resource "azurerm_role_assignment" "image_pull" {
-  count                = var.enable_backend ? 1 : 0
-  scope                = azurerm_container_registry.backend[0].id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_user_assigned_identity.backend[0].principal_id
 }
 resource "azurerm_log_analytics_workspace" "backend" {
   count               = var.enable_backend ? 1 : 0
@@ -149,7 +136,7 @@ resource "azurerm_container_app_environment" "backend" {
   tags                       = local.backend_tags
 }
 resource "azurerm_container_app_job" "migrate" {
-  count                        = local.database_enabled && var.backend_image != null ? 1 : 0
+  count                        = local.image_enabled ? 1 : 0
   name                         = "${var.app_name}-migrate"
   location                     = azurerm_resource_group.flux.location
   resource_group_name          = azurerm_resource_group.flux.name
@@ -162,9 +149,21 @@ resource "azurerm_container_app_job" "migrate" {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.migration[0].id]
   }
-  registry {
-    server   = azurerm_container_registry.backend[0].login_server
-    identity = azurerm_user_assigned_identity.migration[0].id
+  dynamic "registry" {
+    for_each = local.ghcr_auth_enabled ? [1] : []
+    content {
+      server               = "ghcr.io"
+      username             = var.ghcr_username
+      password_secret_name = "ghcr-read-token"
+    }
+  }
+  dynamic "secret" {
+    for_each = local.ghcr_auth_enabled ? [1] : []
+    content {
+      name                = "ghcr-read-token"
+      identity            = azurerm_user_assigned_identity.migration[0].id
+      key_vault_secret_id = "${azurerm_key_vault.backend[0].vault_uri}secrets/${var.ghcr_token_secret_name}"
+    }
   }
   secret {
     name                = "database-runtime"
@@ -201,7 +200,13 @@ resource "azurerm_container_app_job" "migrate" {
       }
     }
   }
-  depends_on = [azurerm_role_assignment.migration_image_pull, azurerm_role_assignment.migration_secret_reader, azurerm_postgresql_flexible_server_database.backend]
+  lifecycle {
+    precondition {
+      condition     = !var.ghcr_private_image || var.ghcr_username != null
+      error_message = "Set the non-secret GHCR token owner's username and enter the read-only token directly in Key Vault before creating the private-image job."
+    }
+  }
+  depends_on = [azurerm_role_assignment.ghcr_migration_reader, azurerm_role_assignment.migration_secret_reader, azurerm_postgresql_flexible_server_database.backend]
 }
 resource "azurerm_container_app" "backend" {
   count                        = local.database_enabled && var.deploy_backend_app ? 1 : 0
@@ -214,9 +219,21 @@ resource "azurerm_container_app" "backend" {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.backend[0].id]
   }
-  registry {
-    server   = azurerm_container_registry.backend[0].login_server
-    identity = azurerm_user_assigned_identity.backend[0].id
+  dynamic "registry" {
+    for_each = local.ghcr_auth_enabled ? [1] : []
+    content {
+      server               = "ghcr.io"
+      username             = var.ghcr_username
+      password_secret_name = "ghcr-read-token"
+    }
+  }
+  dynamic "secret" {
+    for_each = local.ghcr_auth_enabled ? [1] : []
+    content {
+      name                = "ghcr-read-token"
+      identity            = azurerm_user_assigned_identity.backend[0].id
+      key_vault_secret_id = "${azurerm_key_vault.backend[0].vault_uri}secrets/${var.ghcr_token_secret_name}"
+    }
   }
   secret {
     name                = "database-runtime"
@@ -298,6 +315,10 @@ resource "azurerm_container_app" "backend" {
       condition     = var.backend_image != null
       error_message = "Push the tested Flux image and run the administrative migration job before enabling deploy_backend_app."
     }
+    precondition {
+      condition     = !var.ghcr_private_image || var.ghcr_username != null
+      error_message = "Set ghcr_username for a private GHCR image; the read-only token must exist in Key Vault."
+    }
   }
-  depends_on = [azurerm_role_assignment.image_pull, azurerm_role_assignment.key_vault_reader, azurerm_role_assignment.runtime_secret_reader]
+  depends_on = [azurerm_role_assignment.ghcr_runtime_reader, azurerm_role_assignment.key_vault_reader, azurerm_role_assignment.runtime_secret_reader]
 }

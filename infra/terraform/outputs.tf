@@ -3,8 +3,8 @@ output "url" {
   value       = local.database_enabled && var.deploy_backend_app ? "https://${azurerm_container_app.backend[0].ingress[0].fqdn}" : null
 }
 output "backend_registry" {
-  value       = var.enable_backend ? azurerm_container_registry.backend[0].login_server : null
-  description = "Build/push the tested Flux image here after joint review."
+  value       = "ghcr.io/wadat-sumi/flux"
+  description = "External GitHub package location; Terraform creates no container registry."
 }
 output "backend_url" {
   value       = local.database_enabled && var.deploy_backend_app ? "https://${azurerm_container_app.backend[0].ingress[0].fqdn}" : null

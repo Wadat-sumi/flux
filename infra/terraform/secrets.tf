@@ -31,11 +31,17 @@ resource "azurerm_user_assigned_identity" "migration" {
   resource_group_name = azurerm_resource_group.flux.name
   tags                = local.backend_tags
 }
-resource "azurerm_role_assignment" "migration_image_pull" {
-  count                = var.enable_backend ? 1 : 0
-  scope                = azurerm_container_registry.backend[0].id
-  role_definition_name = "AcrPull"
+resource "azurerm_role_assignment" "ghcr_migration_reader" {
+  count                = local.ghcr_auth_enabled ? 1 : 0
+  scope                = "${azurerm_key_vault.backend[0].id}/secrets/${var.ghcr_token_secret_name}"
+  role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_user_assigned_identity.migration[0].principal_id
+}
+resource "azurerm_role_assignment" "ghcr_runtime_reader" {
+  count                = local.ghcr_auth_enabled ? 1 : 0
+  scope                = "${azurerm_key_vault.backend[0].id}/secrets/${var.ghcr_token_secret_name}"
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.backend[0].principal_id
 }
 resource "azurerm_role_assignment" "runtime_secret_reader" {
   count                = local.database_enabled ? 1 : 0

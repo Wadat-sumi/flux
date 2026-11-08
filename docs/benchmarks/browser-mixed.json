@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-11-07T16:44:34.702Z",
+  "recordedAt": "2026-11-08T09:38:16.607Z",
   "browser": "Playwright Chromium",
   "topology": "mixed",
   "viewport": {
@@ -7,11 +7,11 @@
     "height": 900
   },
   "agentsAtStart": 566,
-  "elapsedMs": 4010.7000000476837,
-  "rafFps": 60.08926122550545,
+  "elapsedMs": 4009.600000023842,
+  "rafFps": 60.10574620874076,
   "canvasFps": 60,
-  "p95FrameMs": 16.799999999999727,
-  "simulationTicksPerSecond": 30.169297129817867,
+  "p95FrameMs": 16.700000000000728,
+  "simulationTicksPerSecond": 30.177573822645552,
   "agentsAtEnd": 572,
   "renderedSprites3d": 572,
   "renderedFaces": 6408,

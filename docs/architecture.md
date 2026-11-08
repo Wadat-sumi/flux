@@ -63,3 +63,8 @@ Optional scenario `roundabouts` entities reference one complete directed cycle o
 ### Vehicle presentation and default mix
 
 New presets/OSM imports use the explicitly assumed 30/50/12/4/2/2 car/two-wheeler/auto/LCV/bus/truck mix from src/data/traffic-mix.json. Saved/legacy scenarios preserve their existing fleet. The six original vehicle meshes use normalized footprint coordinates plus visual height, rotate with road direction, apply directional lighting, back-face culling and depth ordering, and draw projected polygons through the existing canvas. The SVG settings preview uses the same mesh/projector. Small sprites retain 3D volume while skipping wheel/trim detail; offscreen sprites are culled. Body appearance and visual height never feed into the simulation engine or profile validation.
+
+
+### GHCR deployment revision
+
+The owner-selected registry is GHCR, with immutable Flux image digests. No Azure registry is provisioned. A manual GitHub workflow gates Buildah/Podman build/smoke/publication on the app tests. Private Azure pulls resolve a read-only GHCR token from Key Vault using secret-scoped runtime/migration identities; managed identity does not directly authenticate to GHCR. The owner executes Terraform from macOS with Azure CLI/Entra-backed Blob state. See deploy-mac-ghcr.md for the current stages and unverified cloud boundaries.

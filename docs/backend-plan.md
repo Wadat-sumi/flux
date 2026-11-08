@@ -42,3 +42,6 @@ Owner follow-up, 7 November: add interactive OSM area selection, automatic direc
 
 - [x] Add six configurable vehicle types, single/mixed selection, physical/driving parameters, type-aware motion/routing/storage, saved profiles and per-type observations.
 - [ ] Fit class shares/parameters to observed classified counts and independent trajectories; implement time-varying/classified OD ingestion, lane-free behaviour, bus dwell and richer signal phases when required by the selected dataset. These are not completed by adding profile defaults.
+
+
+Deployment revision, 8 November: replace the unprovisioned ACR path with GHCR. Terraform supports private Key Vault-backed pull credentials/public opt-in, digest-pinned Flux images and remote Blob state. Containerfile and the manual GitHub Buildah/Podman workflow replace Docker tooling. Local mock stages and the app gate are required before commit; actual Linux image build/publication and Azure state/identity/network/runtime verification remain pending owner execution. Mac commands: deploy-mac-ghcr.md.
