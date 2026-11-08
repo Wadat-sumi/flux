@@ -7,16 +7,21 @@ set -euo pipefail
 [[ "${GITHUB_SHA:-}" =~ ^[a-f0-9]{40}$ ]] || { echo 'A full Git commit SHA is required.' >&2; exit 1; }
 [[ "${FLUX_IMAGE_NAME:-}" == 'ghcr.io/wadat-sumi/flux' ]] || { echo 'Unexpected image destination.' >&2; exit 1; }
 flux_image_ref="${FLUX_IMAGE_NAME}:sha-${GITHUB_SHA}"
+: "${RUNNER_TEMP:?A private runner temp directory is required}"
+[[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] || { echo 'A GitHub workflow run ID is required.' >&2; exit 1; }
+# Keep both tools on a fresh, shared store. Hosted runners can have a preexisting
+# Podman database configured for another driver; never reset the runner's store.
+flux_storage=(--storage-driver=vfs --root="${RUNNER_TEMP}/flux-oci-${GITHUB_RUN_ID}" --runroot="${RUNNER_TEMP}/flux-oci-run-${GITHUB_RUN_ID}")
 
 case "${1:-}" in
   build)
-    sudo buildah --storage-driver=vfs bud --isolation=chroot --format=oci \
+    sudo buildah "${flux_storage[@]}" bud --isolation=chroot --format=oci \
       --arch=amd64 --os=linux --file=Containerfile --tag="$flux_image_ref" \
       --label="org.opencontainers.image.source=https://github.com/Wadat-sumi/flux" \
       --label="org.opencontainers.image.revision=${GITHUB_SHA}" .
     flux_container_name="flux-smoke-${GITHUB_RUN_ID}"
-    trap 'sudo podman --storage-driver=vfs rm --force "$flux_container_name" >/dev/null 2>&1 || true' EXIT
-    sudo podman --storage-driver=vfs run --detach --name="$flux_container_name" \
+    trap 'sudo podman "${flux_storage[@]}" rm --force "$flux_container_name" >/dev/null 2>&1 || true' EXIT
+    sudo podman "${flux_storage[@]}" run --detach --name="$flux_container_name" \
       --pull=never --read-only --cap-drop=all --security-opt=no-new-privileges \
       --memory=2g --pids-limit=256 --tmpfs=/tmp:rw,nosuid,nodev,size=512m \
       --publish=127.0.0.1:4181:3001 --env=NODE_ENV=development \
@@ -34,14 +39,13 @@ case "${1:-}" in
   publish)
     : "${GHCR_PUBLISH_TOKEN:?The ephemeral GitHub job token is required}"
     : "${GITHUB_ACTOR:?The GitHub job actor is required}"
-    : "${RUNNER_TEMP:?A private runner temp directory is required}"
     flux_auth_file="${RUNNER_TEMP}/flux-ghcr-auth.json"
     flux_digest_file="${RUNNER_TEMP}/flux-image-digest.txt"
     trap 'sudo rm -f "$flux_auth_file"' EXIT
     # Credential travels via stdin, never a command argument, output or artifact.
-    printf '%s' "$GHCR_PUBLISH_TOKEN" | sudo buildah login --authfile="$flux_auth_file" \
+    printf '%s' "$GHCR_PUBLISH_TOKEN" | sudo buildah "${flux_storage[@]}" login --authfile="$flux_auth_file" \
       --username="$GITHUB_ACTOR" --password-stdin ghcr.io >/dev/null
-    sudo buildah --storage-driver=vfs push --authfile="$flux_auth_file" \
+    sudo buildah "${flux_storage[@]}" push --authfile="$flux_auth_file" \
       --digestfile="$flux_digest_file" "$flux_image_ref" "$flux_image_ref"
     flux_digest="$(sudo cat "$flux_digest_file")"
     [[ "$flux_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'Registry digest is invalid.' >&2; exit 1; }
