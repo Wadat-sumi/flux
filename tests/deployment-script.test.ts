@@ -146,6 +146,7 @@ function mockedDeployment(
     badRepairReference?: boolean;
     badRepairStatus?: boolean;
     repairInspectionFailure?: boolean;
+    absentResponse?: string;
   } = {},
 ) {
   const root = temp();
@@ -243,12 +244,12 @@ if(tool==='az'){
  if(key.startsWith('keyvault secret list'))out('true');
  if(key.startsWith('containerapp job start'))out('flux-test-migrate-fixture');
  if(key.startsWith('containerapp job execution list'))out(process.env.FLUX_TEST_FAILED_MIGRATION?'Failed':'Succeeded');
- if(key.startsWith('resource show')){
-  const id=a[a.indexOf('--ids')+1];
+ if(key.startsWith('rest ')){
+  const id=new URL(a[a.indexOf('--url')+1]).pathname;
   if(process.env.FLUX_TEST_REPAIR_INSPECTION_FAILURE){process.stderr.write('SENTINEL_SECRET');process.exit(1);}
   if(process.env.FLUX_TEST_EXISTING_DNS&&id.includes('/virtualNetworkLinks/'))out({id,state:process.env.FLUX_TEST_BAD_REPAIR_STATUS?'Updating':'Failed',reference:process.env.FLUX_TEST_BAD_REPAIR_REFERENCE?'SENTINEL_SECRET':'/subscriptions/'+c.subscription+'/resourceGroups/'+c.group+'/providers/Microsoft.Network/virtualNetworks/'+c.app+'-vnet'});
   if(process.env.FLUX_TEST_EXISTING_ENVIRONMENT&&id.includes('/managedEnvironments/'))out({id,state:'Failed',reference:'/subscriptions/'+c.subscription+'/resourceGroups/'+c.group+'/providers/Microsoft.Network/virtualNetworks/'+c.app+'-vnet/subnets/containers'});
-  process.stderr.write('ERROR: (ResourceNotFound) Fixture resource absent');process.exit(1);
+  process.stderr.write(process.env.FLUX_TEST_ABSENT_RESPONSE||'ERROR: (ResourceNotFound) Fixture resource absent');process.exit(1);
  }
 }
 if(tool==='terraform'){
@@ -302,6 +303,9 @@ process.stderr.write('Unexpected mock command: '+tool+' '+key);process.exit(3);
     ...(options.badRepairStatus ? { FLUX_TEST_BAD_REPAIR_STATUS: "1" } : {}),
     ...(options.repairInspectionFailure
       ? { FLUX_TEST_REPAIR_INSPECTION_FAILURE: "1" }
+      : {}),
+    ...(options.absentResponse
+      ? { FLUX_TEST_ABSENT_RESPONSE: options.absentResponse }
       : {}),
   };
   const execute = (input: string, args: string[] = []) =>
@@ -773,4 +777,115 @@ test("a declined recovery plan leaves the old checkpoint and protected state unc
     revision: config.revision,
     deployment_id: config.deployment_id,
   });
+});
+
+test.each([
+  ["ERROR: (NotFound) Fixture absent", "NotFound"],
+  ["ERROR: (ResourceNotFound) Fixture absent", "ResourceNotFound"],
+  ["ERROR: (ParentResourceNotFound) Fixture absent", "ParentResourceNotFound"],
+  [
+    'ERROR: Not Found({"error":{"code":"NotFound","message":"SENTINEL_SECRET"}})',
+    "NotFound",
+  ],
+  [
+    'ERROR: Forbidden({"error":{"code":"AuthorizationFailed","message":"SENTINEL_SECRET"}})',
+    "AuthorizationFailed",
+  ],
+  [
+    'ERROR: (AuthorizationFailed) {"error":{"code":"NotFound"}}',
+    "AuthorizationFailed",
+  ],
+  [
+    'ERROR: Not Found({"error":{"code":"InvalidApiVersionParameter"}})',
+    "InvalidApiVersionParameter",
+  ],
+  ['ERROR: Not Found({"error":{"code":"SENTINEL_SECRET"}})', "Unclassified"],
+  ['ERROR: (SENTINEL_SECRET) {"error":{"code":"NotFound"}}', "Unclassified"],
+  [
+    "ERROR: unrecognized arguments: --api-version SENTINEL_SECRET",
+    "CliArgumentError",
+  ],
+  ["ERROR: Please run 'az login' to setup account.", "LoginRequired"],
+  [
+    "SENTINEL_SECRET https://user:pass@example.invalid/?sig=SENTINEL_SECRET",
+    "Unclassified",
+  ],
+])(
+  "Azure CLI inspection errors are classified without exposing their payload: %s",
+  (payload, expected) => {
+    const r = spawnSync(
+      "python3",
+      [
+        "-c",
+        "import runpy,sys,json; m=runpy.run_path(sys.argv[1]); print(m['error_code'](json.load(sys.stdin)))",
+        resolve("scripts/prepare-network-repair.py"),
+      ],
+      { encoding: "utf8", input: JSON.stringify(payload) },
+    );
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.trim()).toBe(expected);
+    expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+  },
+);
+test.each([
+  "ERROR: (NotFound) Absent",
+  'ERROR: Not Found({"error":{"code":"NotFound","message":"SENTINEL_SECRET"}})',
+])(
+  "confirmed missing recovery resources proceed to a reviewed create plan: %s",
+  (absentResponse) => {
+    const f = mockedDeployment({
+      repair: true,
+      revisionChanged: true,
+      absentResponse,
+    });
+    const r = f.execute("NO\n", ["--repair-network"]);
+    expect(r.stderr).toContain("No changes approved");
+    expect(r.stdout).toContain(
+      "Azure resource is absent; Terraform will create",
+    );
+    expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+    const reads = f
+      .commands()
+      .filter((c) => c.tool === "az" && c.args[0] === "rest");
+    expect(reads).toHaveLength(2);
+    for (const read of reads) {
+      expect(read.args[read.args.indexOf("--method") + 1]).toBe("get");
+      const url = new URL(read.args[read.args.indexOf("--url") + 1]);
+      expect(url.origin).toBe("https://management.azure.com");
+      expect(
+        url.pathname.startsWith(
+          `/subscriptions/${config.subscription}/resourceGroups/${config.group}/providers/`,
+        ),
+      ).toBe(true);
+      expect([...url.searchParams.keys()]).toEqual(["api-version"]);
+      expect(url.username + url.password).toBe("");
+    }
+    expect(
+      f.commands().some((c) => c.tool === "terraform" && c.args[0] === "apply"),
+    ).toBe(false);
+  },
+);
+test("authorization inspection failure identifies the resource and code, never treating it as absent", () => {
+  const f = mockedDeployment({
+    repair: true,
+    revisionChanged: true,
+    absentResponse:
+      'ERROR: Forbidden({"error":{"code":"AuthorizationFailed","message":"SENTINEL_SECRET"}})',
+  });
+  const r = f.execute("", ["--repair-network"]);
+  expect(r.status).not.toBe(0);
+  expect(r.stderr).toContain(
+    "azurerm_private_dns_zone_virtual_network_link.database[0]",
+  );
+  expect(r.stderr).toContain("Azure code AuthorizationFailed; CLI exit 1");
+  expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+  expect(
+    f
+      .commands()
+      .some(
+        (c) =>
+          c.tool === "terraform" &&
+          ["plan", "apply", "import"].includes(c.args[0]),
+      ),
+  ).toBe(false);
 });
