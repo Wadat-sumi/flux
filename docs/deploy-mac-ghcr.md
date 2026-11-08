@@ -4,6 +4,24 @@ Run these commands in the Antigravity terminal against **Wadat-sumi/flux**, on `
 
 Status: local application checks and Terraform mock plans can be verified without Azure. The new GitHub image workflow, registry publication and Azure deployment must still be run and verified. Nothing in this guide has been provisioned automatically. Azure resources, storage and GitHub runner/package usage may incur charges; agree the region, subscription and cost tier before the creation steps.
 
+## Single-command guided deployment
+
+From the Flux checkout on `main`, run:
+
+```sh
+bash scripts/deploy-azure.sh
+```
+
+The script targets **Central India (`centralindia`)** and runs on macOS Bash 3.2. Prerequisites: Git, Azure CLI, Terraform 1.9–1.x, Python 3 and curl. No local container tool is needed. Read-only local preflight is available with `bash scripts/deploy-azure.sh --check`.
+
+It logs in through Azure CLI when needed, collects non-secret configuration once, checks regional Container Apps/PostgreSQL SKU metadata, verifies protected remote state, and guides foundation → vault metadata readiness → verified GHCR digest → database → migration job/success → application → HTTPS health/frontend. Each saved plan is reviewed before typed approval. Deletions/replacements, foreign-resource updates, foreign existing resource groups, inherited credential/debug/CLI overrides, invalid configuration and mutable images are rejected. The deployment UUID tags its application resource group.
+
+There are one-time browser tasks inside the guided run: create a dedicated protected state store in Central India, enter secrets/grant your operator access in Key Vault, and run the manual GHCR workflow. The script opens the relevant pages and waits; it never asks you to paste a secret value. Copy only the non-secret verified image digest after checking the workflow passed for the commit shown by the script. State storage needs shared keys/anonymous access disabled, HTTPS/TLS1.2, restricted networks, versioning and Blob/container soft delete; your operator needs Storage Blob Data Contributor. State storage is inspected, not reconfigured or adopted automatically.
+
+Non-secret settings/checkpoints and sensitive private Terraform plans live in ignored `.flux-deploy/` with restrictive permissions. Do not commit/share that folder. Rerun the same command from the same commit to resume completed stages; it does not rerun a successful migration or downgrade enabled services. An interrupted/failed run can leave billable resources running for recovery. No automatic rollback/destroy is performed. A failed migration requires fixing the cause and explicitly clearing only its execution checkpoint to retry. After an unclean process kill, inspect a stale `.flux-deploy/lock` before removing it.
+
+The script is locally tested with mocked cloud tools and plan/configuration fixtures. It has **not** executed a live deployment. Production signup and TomTom stay disabled. The detailed manual steps below remain available for review and recovery.
+
 ## 1. Update and select the Azure subscription
 
 ```sh
@@ -62,7 +80,7 @@ Edit only non-secret settings:
 
 ```hcl
 subscription_id            = "<YOUR-SUBSCRIPTION-ID>"
-location                   = "westeurope"
+location                   = "centralindia"
 resource_group_name        = "flux-staging-rg"
 app_name                   = "flux-staging"
 backend_key_vault_name     = "<YOUR-UNIQUE-FLUX-VAULT-NAME>"
@@ -77,7 +95,7 @@ enable_tomtom              = false
 key_vault_admin_ip_rules   = ["<YOUR-PUBLIC-IP>/32"]
 ```
 
-Replace the example region after checking support/costs. Current accepted values are `westeurope`, `eastasia`, `centralus`, `eastus2`, `westus2`. Replace all angle-bracket placeholders. `app_name`, resource group and vault must be new; vault names must follow the validated `flux-` prefix. `ghcr_username` is the owner of the pull token, not necessarily the package owner. Find your client IPv4 in the Portal networking panel and allow that exact /32.
+Replace the example region after checking support/costs. Current accepted values are `centralindia`, `westeurope`, `eastasia`, `centralus`, `eastus2`, `westus2`. Replace all angle-bracket placeholders. `app_name`, resource group and vault must be new; vault names must follow the validated `flux-` prefix. `ghcr_username` is the owner of the pull token, not necessarily the package owner. Find your client IPv4 in the Portal networking panel and allow that exact /32.
 
 Confirm the dedicated application group does **not** already exist:
 

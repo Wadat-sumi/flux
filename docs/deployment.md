@@ -1,6 +1,6 @@
 # Flux full-stack Azure deployment
 
-Use the current [macOS + GHCR deployment runbook](deploy-mac-ghcr.md). This supersedes the unprovisioned Azure Container Registry/Docker build path. No Azure registry resource remains in Terraform.
+Run `bash scripts/deploy-azure.sh` for the guided single-command Central India deployment. Use the current [macOS + GHCR deployment runbook](deploy-mac-ghcr.md) for prerequisites, one-time Portal tasks and recovery. This supersedes the unprovisioned Azure Container Registry/Docker build path. No Azure registry resource remains in Terraform.
 
 Status: not deployed. Azure login, cost/plan review, state storage, provisioning, live secret/network checks and HTTPS verification remain for the owner's joint review. Local Terraform format/schema validation and mock staged plans are separate from a successful cloud deployment.
 

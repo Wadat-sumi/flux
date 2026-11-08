@@ -1,6 +1,6 @@
 # Non-secret examples only. Use authorized Azure identity. Real credentials belong in Key Vault.
 subscription_id     = "00000000-0000-0000-0000-000000000000"
-location            = "westeurope"
+location            = "centralindia"
 resource_group_name = "flux-quest-rg"
 app_name            = "flux-quest"
 

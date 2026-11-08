@@ -121,3 +121,14 @@ run "database_secret_cannot_be_registry_credential" {
   variables { ghcr_token_secret_name = "database-bootstrap-url" }
   expect_failures = [var.ghcr_token_secret_name]
 }
+run "central_india_and_ownership_marker" {
+  command = plan
+  variables {
+    deployment_id  = "11111111-1111-4111-8111-111111111111"
+    enable_backend = true
+  }
+  assert {
+    condition     = azurerm_resource_group.flux.location == "centralindia" && azurerm_resource_group.flux.tags.fluxDeploymentId == "11111111-1111-4111-8111-111111111111"
+    error_message = "Central India and the deployment ownership marker must reach the resource group."
+  }
+}

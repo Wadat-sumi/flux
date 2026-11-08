@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-server/
 .flux-data/
+.flux-deploy/
 coverage/
 playwright-report/
 test-results/

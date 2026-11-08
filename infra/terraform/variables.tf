@@ -8,10 +8,20 @@ variable "subscription_id" {
 variable "location" {
   description = "Azure resource region; verify Container Apps/PostgreSQL/Key Vault support and quotas at joint review."
   type        = string
-  default     = "westeurope"
+  default     = "centralindia"
   validation {
-    condition     = contains(["westeurope", "eastasia", "centralus", "eastus2", "westus2"], var.location)
+    condition     = contains(["centralindia", "westeurope", "eastasia", "centralus", "eastus2", "westus2"], var.location)
     error_message = "Choose one of the reviewed Azure regions."
+  }
+}
+variable "deployment_id" {
+  description = "Non-secret ownership marker used by the guided deployment script."
+  type        = string
+  default     = null
+  nullable    = true
+  validation {
+    condition     = var.deployment_id == null || can(regex("^[a-f0-9-]{36}$", var.deployment_id))
+    error_message = "Use the deployment UUID created by the script."
   }
 }
 

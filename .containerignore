@@ -5,6 +5,7 @@ dist-server
 .git
 .tools
 .flux-data
+.flux-deploy
 .env
 .env.*
 *.jsonl
