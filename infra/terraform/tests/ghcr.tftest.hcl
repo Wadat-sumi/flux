@@ -32,6 +32,10 @@ run "foundation" {
     condition     = length(azurerm_key_vault.backend) == 1 && length(azurerm_container_app_job.migrate) == 0 && length(data.azurerm_key_vault_secret.database_admin_password) == 0
     error_message = "Foundation provisioning must not read passwords or start applications."
   }
+  assert {
+    condition     = one(one(azurerm_subnet.containers[0].delegation).service_delegation).name == "Microsoft.App/environments" && one(one(azurerm_subnet.database[0].delegation).service_delegation).name == "Microsoft.DBforPostgreSQL/flexibleServers"
+    error_message = "Container Apps and PostgreSQL need separate, correctly delegated subnets."
+  }
 }
 run "private_image_job" {
   command = plan
@@ -135,5 +139,9 @@ run "central_india_and_ownership_marker" {
   assert {
     condition     = azurerm_role_assignment.operator_secrets[0].role_definition_name == "Key Vault Secrets Officer"
     error_message = "The wrapper must grant vault entry access to the authenticated operator."
+  }
+  assert {
+    condition     = azurerm_private_dns_zone_virtual_network_link.database[0].tags.fluxDeploymentId == var.deployment_id && azurerm_container_app_environment.backend[0].tags.fluxDeploymentId == var.deployment_id
+    error_message = "Owned recovery resources need an in-place ownership-tag update to retry their failed creation."
   }
 }

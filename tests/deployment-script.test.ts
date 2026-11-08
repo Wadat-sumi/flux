@@ -8,6 +8,7 @@ import {
   symlinkSync,
   rmSync,
   existsSync,
+  readdirSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -139,18 +140,40 @@ function mockedDeployment(
     providerMode?: string;
     revisionChanged?: boolean;
     progressed?: boolean;
+    repair?: boolean;
+    existingDns?: boolean;
+    existingEnvironment?: boolean;
+    badRepairReference?: boolean;
+    badRepairStatus?: boolean;
+    repairInspectionFailure?: boolean;
   } = {},
 ) {
   const root = temp();
   for (const name of [
     "scripts",
     "infra/terraform",
+    "infra/terraform/tests",
     "infra/bootstrap",
     ".flux-deploy",
     "bin",
   ])
     mkdirSync(join(root, name), { recursive: true });
   copyFileSync(source, join(root, "scripts/deploy-azure.sh"));
+  copyFileSync(
+    resolve("scripts/prepare-network-repair.py"),
+    join(root, "scripts/prepare-network-repair.py"),
+  );
+  for (const file of readdirSync(resolve("infra/terraform")).filter(
+    (f) => f.endsWith(".tf") || f === ".terraform.lock.hcl",
+  ))
+    copyFileSync(
+      resolve("infra/terraform", file),
+      join(root, "infra/terraform", file),
+    );
+  copyFileSync(
+    resolve("infra/terraform/tests/ghcr.tftest.hcl"),
+    join(root, "infra/terraform/tests/ghcr.tftest.hcl"),
+  );
   for (const file of ["main.tf", ".terraform.lock.hcl"])
     copyFileSync(
       resolve("infra/bootstrap", file),
@@ -158,6 +181,10 @@ function mockedDeployment(
     );
   if (!options.fresh) {
     const c: Record<string, unknown> = { ...config };
+    if (options.repair) {
+      c.bootstrap_complete = true;
+      c.image = "";
+    }
     if (options.progressed) {
       c.phase = "1";
       c.bootstrap_complete = true;
@@ -169,6 +196,15 @@ function mockedDeployment(
     writeFileSync(join(root, ".flux-deploy/config.json"), JSON.stringify(c));
   }
   if (options.missingState) writeFileSync(join(root, "state-applied"), "true");
+  if (options.repair) {
+    mkdirSync(join(root, ".flux-deploy/bootstrap"), { recursive: true });
+    writeFileSync(
+      join(root, ".flux-deploy/bootstrap/terraform.tfstate"),
+      "Retained bootstrap metadata fixture",
+    );
+    writeFileSync(join(root, "state-applied"), "true");
+    writeFileSync(join(root, "applied"), "true");
+  }
   const mock = join(root, "bin/mock.mjs"),
     log = join(root, "commands.jsonl");
   writeFileSync(
@@ -178,17 +214,21 @@ import fs from 'node:fs';import path from 'node:path';
 const root=process.env.FLUX_TEST_ROOT,a=process.argv.slice(2),tool=path.basename(process.argv[1]),key=a.join(' ');
 fs.appendFileSync(root+'/commands.jsonl',JSON.stringify({tool,args:a})+'\\n');
 const out=v=>{process.stdout.write(typeof v==='string'?v+'\\n':JSON.stringify(v)+'\\n');process.exit(0)},c=fs.existsSync(root+'/.flux-deploy/config.json')?JSON.parse(fs.readFileSync(root+'/.flux-deploy/config.json')):null;
-if(tool==='git'){if(key==='remote get-url origin')out('https://github.com/Wadat-sumi/flux.git');if(key==='branch --show-current')out('main');if(key==='status --porcelain')out('');if(key==='rev-parse HEAD')out((process.env.FLUX_TEST_REVISION_CHANGED?'b':'a').repeat(40));}
+if(tool==='git'){if(key==='remote get-url origin')out('https://github.com/Wadat-sumi/flux.git');if(key==='branch --show-current')out('main');if(key==='status --porcelain'||key.startsWith('merge-base --is-ancestor'))out('');if(key==='rev-parse HEAD')out((process.env.FLUX_TEST_REVISION_CHANGED?'b':'a').repeat(40));}
 if(tool==='az'){
  if(key.startsWith('account show')||key.startsWith('account set')||key.startsWith('version'))out('');
  if(key.startsWith('account list'))out('Fixture subscription');
  if(key.startsWith('provider show')){if(a.includes('registrationState')){
   const mode=process.env.FLUX_TEST_PROVIDER_MODE;
-  if(a.includes('Microsoft.Network')&&mode){
+  if(a.includes('Microsoft.App')&&mode==='app-progress')out('Registering');
+  if(a.includes('Microsoft.Network')&&mode&&mode!=='app-progress'){
    if(mode==='status-fails'){process.stderr.write('SENTINEL_SECRET');process.exit(1);}
    if(mode==='unknown')out('SENTINEL_SECRET');
    if(mode==='unregistering')out('Unregistering');
-   if(mode==='in-progress')out('Registering');
+   if(mode==='stuck')out('Registering');
+   const p=root+'/provider-checks',n=fs.existsSync(p)?Number(fs.readFileSync(p)):0;fs.writeFileSync(p,String(n+1));
+   if(mode==='in-progress')out(n===0?'Registering':'Registered');
+   if(mode==='register'&&n>=2)out('Registered');
    out(fs.existsSync(root+'/provider-submitted')&&mode!=='stale'?'Registering':'NotRegistered');
   }
   out('Registered');
@@ -203,11 +243,19 @@ if(tool==='az'){
  if(key.startsWith('keyvault secret list'))out('true');
  if(key.startsWith('containerapp job start'))out('flux-test-migrate-fixture');
  if(key.startsWith('containerapp job execution list'))out(process.env.FLUX_TEST_FAILED_MIGRATION?'Failed':'Succeeded');
+ if(key.startsWith('resource show')){
+  const id=a[a.indexOf('--ids')+1];
+  if(process.env.FLUX_TEST_REPAIR_INSPECTION_FAILURE){process.stderr.write('SENTINEL_SECRET');process.exit(1);}
+  if(process.env.FLUX_TEST_EXISTING_DNS&&id.includes('/virtualNetworkLinks/'))out({id,state:process.env.FLUX_TEST_BAD_REPAIR_STATUS?'Updating':'Failed',reference:process.env.FLUX_TEST_BAD_REPAIR_REFERENCE?'SENTINEL_SECRET':'/subscriptions/'+c.subscription+'/resourceGroups/'+c.group+'/providers/Microsoft.Network/virtualNetworks/'+c.app+'-vnet'});
+  if(process.env.FLUX_TEST_EXISTING_ENVIRONMENT&&id.includes('/managedEnvironments/'))out({id,state:'Failed',reference:'/subscriptions/'+c.subscription+'/resourceGroups/'+c.group+'/providers/Microsoft.Network/virtualNetworks/'+c.app+'-vnet/subnets/containers'});
+  process.stderr.write('ERROR: (ResourceNotFound) Fixture resource absent');process.exit(1);
+ }
 }
 if(tool==='terraform'){
  if(key==='version -json')out({terraform_version:'1.9.8'});
  if(a[0]==='init'||a[0]==='fmt'||a[0]==='validate'||a[0]==='test')out('');
  if(a[0]==='plan'){const p=a.find(x=>x.startsWith('-out=')).slice(5);fs.writeFileSync(p,'Private binary-plan fixture');out('Mock plan');}
+ if(key==='show -json')out({values:{root_module:{resources:[{address:'azurerm_resource_group.flux',mode:'managed',values:{id:'/subscriptions/'+c.subscription+'/resourceGroups/'+c.group,tags:{fluxDeploymentId:c.deployment_id},value:'SENTINEL_SECRET'}}]}}});
  if(a[0]==='show')out({resource_changes:[{mode:'managed',change:{actions:process.env.FLUX_TEST_DESTRUCTIVE?['delete','create']:['create'],before:null,after:{value:'SENTINEL_SECRET'}}}]});
  if(a[0]==='apply'){if(process.cwd().endsWith('/bootstrap')){fs.writeFileSync(root+'/state-applied','true');fs.writeFileSync(process.cwd()+'/terraform.tfstate','Fixture metadata only');}else fs.writeFileSync(root+'/applied','true');out('');}
  if(key==='output -raw backend_url')out('https://flux-test-api.fixture.centralindia.azurecontainerapps.io');
@@ -215,11 +263,20 @@ if(tool==='terraform'){
 if(tool==='open')out('');
 if(tool==='curl'){if(key.includes('api.ipify.org')||key.includes('checkip.amazonaws.com'))out(process.env.FLUX_TEST_BAD_IP?'192.168.1.1':'8.8.8.8');out({status:'ok'});}
 if(tool==='sleep')out('');
+if(tool==='date'){if(process.env.FLUX_TEST_PROVIDER_MODE==='stuck'){const p=root+'/date-checks',n=fs.existsSync(p)?Number(fs.readFileSync(p)):0;fs.writeFileSync(p,String(n+1));out(n<2?'0':'601');}out(String(Math.floor(Date.now()/1000)));}
 process.stderr.write('Unexpected mock command: '+tool+' '+key);process.exit(3);
 `,
     { mode: 0o755 },
   );
-  for (const tool of ["git", "az", "terraform", "open", "curl", "sleep"])
+  for (const tool of [
+    "git",
+    "az",
+    "terraform",
+    "open",
+    "curl",
+    "sleep",
+    "date",
+  ])
     symlinkSync(mock, join(root, "bin", tool));
   const env = {
     ...process.env,
@@ -235,6 +292,17 @@ process.stderr.write('Unexpected mock command: '+tool+' '+key);process.exit(3);
       ? { FLUX_TEST_PROVIDER_MODE: options.providerMode }
       : {}),
     ...(options.revisionChanged ? { FLUX_TEST_REVISION_CHANGED: "1" } : {}),
+    ...(options.existingDns ? { FLUX_TEST_EXISTING_DNS: "1" } : {}),
+    ...(options.existingEnvironment
+      ? { FLUX_TEST_EXISTING_ENVIRONMENT: "1" }
+      : {}),
+    ...(options.badRepairReference
+      ? { FLUX_TEST_BAD_REPAIR_REFERENCE: "1" }
+      : {}),
+    ...(options.badRepairStatus ? { FLUX_TEST_BAD_REPAIR_STATUS: "1" } : {}),
+    ...(options.repairInspectionFailure
+      ? { FLUX_TEST_REPAIR_INSPECTION_FAILURE: "1" }
+      : {}),
   };
   const execute = (input: string, args: string[] = []) =>
     spawnSync("/bin/bash", [join(root, "scripts/deploy-azure.sh"), ...args], {
@@ -423,14 +491,17 @@ test("state RBAC propagation retries and failed migrations never deploy the appl
 });
 
 test.each(["in-progress", "register"])(
-  "provider %s continues without a global registration wait",
+  "Network provider %s waits visibly until Registered before any plan",
   (providerMode) => {
     const f = mockedDeployment({ providerMode });
     const r = f.execute(
       providerMode === "register" ? "REGISTER\nNO\n" : "NO\n",
     );
     expect(r.stderr).toContain("No changes approved"); // Reaches the first saved plan.
-    expect(r.stdout).toContain("Microsoft.Network: Registering; continuing");
+    expect(r.stdout).toContain(
+      "waiting for authorization before DNS/VNet operations",
+    );
+    expect(r.stdout).toContain("Microsoft.Network: Registered");
     const registrations = f
       .commands()
       .filter(
@@ -496,3 +567,210 @@ test.each([{ progressed: true }, { missingState: true }])(
     ).toBe(false);
   },
 );
+
+test("other providers may continue registering, while a stuck Network registration times out before provisioning", () => {
+  const other = mockedDeployment({ providerMode: "app-progress" });
+  expect(other.execute("NO\n").stderr).toContain("No changes approved");
+  const stuck = mockedDeployment({ providerMode: "stuck" });
+  const r = stuck.execute("");
+  expect(r.status).not.toBe(0);
+  expect(r.stderr).toContain("10 minutes");
+  expect(
+    stuck
+      .commands()
+      .some(
+        (c) => c.tool === "terraform" && ["plan", "apply"].includes(c.args[0]),
+      ),
+  ).toBe(false);
+});
+test("reviewed network repair imports only the owned failed network resources, preserves bootstrap, and completes without duplicating migration", () => {
+  const f = mockedDeployment({
+    repair: true,
+    revisionChanged: true,
+    existingDns: true,
+    existingEnvironment: true,
+  });
+  const r = f.execute(
+    "APPLY-flux-test\n\n" +
+      config.image +
+      "\nVERIFIED\nAPPLY-flux-test\nAPPLY-flux-test\nMIGRATE\nAPPLY-flux-test\n",
+    ["--repair-network"],
+  );
+  expect(r.status, r.stdout + r.stderr).toBe(0);
+  expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+  const c = JSON.parse(
+    readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
+  );
+  expect(c).toMatchObject({
+    phase: "4",
+    revision: "b".repeat(40),
+    deployment_id: config.deployment_id,
+    bootstrap_complete: true,
+  });
+  const imports = readFileSync(
+    join(f.root, ".flux-deploy/network-repair/network-recovery.import.tf"),
+    "utf8",
+  );
+  expect(imports).toContain(
+    "azurerm_private_dns_zone_virtual_network_link.database[0]",
+  );
+  expect(imports).toContain("azurerm_container_app_environment.backend[0]");
+  expect(f.execute("\n").status).toBe(0);
+  expect(
+    f.commands().filter((c) => c.tool === "terraform" && c.args[0] === "apply"),
+  ).toHaveLength(4);
+  expect(
+    f
+      .commands()
+      .filter(
+        (c) =>
+          c.tool === "az" &&
+          c.args.slice(0, 3).join(" ") === "containerapp job start",
+      ),
+  ).toHaveLength(1);
+  expect(
+    f
+      .commands()
+      .some(
+        (c) =>
+          c.tool === "terraform" &&
+          ["import", "destroy", "untaint"].includes(c.args[0]),
+      ),
+  ).toBe(false);
+});
+test.each([
+  { repair: true, destructive: true },
+  { repair: true, foreign: true },
+  { repair: true, progressed: true },
+])(
+  "network repair refuses destructive plans, foreign ownership or progressed stages %j",
+  (options) => {
+    const f = mockedDeployment({ ...options, revisionChanged: true });
+    const r = f.execute("APPLY-flux-test\n", ["--repair-network"]);
+    expect(r.status).not.toBe(0);
+    const c = JSON.parse(
+      readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
+    );
+    expect(c.revision).toBe(config.revision);
+    expect(
+      f.commands().some((c) => c.tool === "terraform" && c.args[0] === "apply"),
+    ).toBe(false);
+  },
+);
+
+test.each([
+  { badRepairReference: true },
+  { badRepairStatus: true },
+  { repairInspectionFailure: true },
+])(
+  "network repair rejects mismatched resources, active operations and inspection failures %j",
+  (options) => {
+    const f = mockedDeployment({
+      ...options,
+      repair: true,
+      revisionChanged: true,
+      existingDns: true,
+    });
+    const r = f.execute("", ["--repair-network"]);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain("Network recovery stopped");
+    expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+    expect(
+      f
+        .commands()
+        .some(
+          (c) =>
+            c.tool === "terraform" &&
+            ["plan", "apply", "import"].includes(c.args[0]),
+        ),
+    ).toBe(false);
+  },
+);
+test.each([
+  "valid",
+  "foreign-group",
+  "foreign-marker",
+  "missing-anchor",
+  "malformed",
+])("network recovery filters protected state ownership: %s", (kind) => {
+  const dir = temp(),
+    output = join(dir, "addresses.json");
+  const state = {
+    values: {
+      root_module: {
+        resources:
+          kind === "missing-anchor"
+            ? []
+            : [
+                {
+                  address: "azurerm_resource_group.flux",
+                  mode: "managed",
+                  values: {
+                    id:
+                      kind === "foreign-group"
+                        ? "/subscriptions/foreign/resourceGroups/production"
+                        : `/subscriptions/${config.subscription}/resourceGroups/${config.group}`,
+                    tags: {
+                      fluxDeploymentId:
+                        kind === "foreign-marker"
+                          ? "other"
+                          : config.deployment_id,
+                    },
+                    password: "SENTINEL_SECRET",
+                  },
+                },
+              ],
+      },
+    },
+  };
+  const r = spawnSync(
+    "python3",
+    [resolve("scripts/prepare-network-repair.py"), "state", fixture(), output],
+    {
+      encoding: "utf8",
+      input:
+        kind === "malformed"
+          ? "invalid state SENTINEL_SECRET"
+          : JSON.stringify(state),
+    },
+  );
+  expect(r.stdout + r.stderr).not.toContain("SENTINEL_SECRET");
+  if (kind === "valid") {
+    expect(r.status).toBe(0);
+    expect(JSON.parse(readFileSync(output, "utf8"))).toEqual([
+      "azurerm_resource_group.flux",
+    ]);
+  } else {
+    expect(r.status).not.toBe(0);
+    expect(existsSync(output)).toBe(false);
+  }
+});
+
+test("a declined recovery plan leaves the old checkpoint and protected state unchanged", () => {
+  const f = mockedDeployment({
+    repair: true,
+    revisionChanged: true,
+    existingDns: true,
+  });
+  const r = f.execute("NO\n", ["--repair-network"]);
+  expect(r.stderr).toContain("No changes approved");
+  expect(
+    f.commands().some((c) => c.tool === "terraform" && c.args[0] === "apply"),
+  ).toBe(false);
+  const imports = readFileSync(
+    join(f.root, ".flux-deploy/network-repair/network-recovery.import.tf"),
+    "utf8",
+  );
+  expect(imports).toContain(
+    "azurerm_private_dns_zone_virtual_network_link.database[0]",
+  );
+  expect(imports).not.toContain("azurerm_container_app_environment");
+  const c = JSON.parse(
+    readFileSync(join(f.root, ".flux-deploy/config.json"), "utf8"),
+  );
+  expect(c).toMatchObject({
+    phase: "0",
+    revision: config.revision,
+    deployment_id: config.deployment_id,
+  });
+});

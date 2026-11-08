@@ -18,6 +18,7 @@ TF="$ROOT/infra/terraform"
 BOOT="$WORK/bootstrap"
 REPO='https://github.com/Wadat-sumi/flux'
 REGION='centralindia'
+REPAIR_NETWORK=false
 
 fail() { printf '\nStopped: %s\n' "$*" >&2; exit 1; }
 ask() {
@@ -102,13 +103,13 @@ PY
 
 provider_cli() {
   # Avoid an unbounded Azure CLI --wait and never expose CLI/debug payloads.
-  python3 - "$1" "$2" <<'PY'
+  python3 - "$1" "$2" "${3:-45}" <<'PY'
 import subprocess,sys
-action,namespace=sys.argv[1:]
+action,namespace,limit=sys.argv[1:]; limit=max(1,min(45,int(limit)))
 args=['az','provider',action,'--namespace',namespace,'--only-show-errors']
 args+=['--query','registrationState','--output','tsv'] if action=='show' else ['--output','none']
-try: result=subprocess.run(args,capture_output=True,text=True,timeout=45)
-except subprocess.TimeoutExpired: sys.exit('Azure provider request timed out after 45 seconds. Check connectivity and rerun; registration may continue in Azure.')
+try: result=subprocess.run(args,capture_output=True,text=True,timeout=limit)
+except subprocess.TimeoutExpired: sys.exit('Azure provider request timed out. Check connectivity and rerun; registration may continue in Azure.')
 if result.returncode: sys.exit('Azure provider request failed. Check Azure CLI login, subscription permissions and connectivity, then rerun.')
 if action=='show':
  status=result.stdout.strip()
@@ -117,12 +118,28 @@ if action=='show':
 PY
 }
 
+wait_network_registration() {
+  started="$(date +%s)"
+  while [ "$status" = Registering ]; do
+    elapsed=$(( $(date +%s) - started ))
+    [ "$elapsed" -lt 600 ] || fail 'Microsoft.Network is still registering after 10 minutes. Wait for Azure to finish, then rerun the same command; state is retained.'
+    printf 'Microsoft.Network: Registering (%ss elapsed); waiting for authorization before DNS/VNet operations.\n' "$elapsed"
+    sleep 5
+    remaining=$(( 600 - $(date +%s) + started ))
+    [ "$remaining" -gt 0 ] || fail 'Microsoft.Network registration wait reached 10 minutes. Rerun after Azure finishes; state is retained.'
+    [ "$remaining" -le 45 ] || remaining=45
+    status="$(provider_cli show Microsoft.Network "$remaining")"
+  done
+  [ "$status" = Registered ] || fail 'Microsoft.Network did not become Registered. Check provider registration, Azure login and subscription permissions before retrying.'
+}
+
 case "${1:-}" in
   --help|-h)
-    printf 'Usage: bash scripts/deploy-azure.sh [--check | --check-config FILE | --audit-plan FILE]\nRun without flags for guided Central India deployment. --audit-plan reads Terraform JSON from stdin.\n'
+    printf 'Usage: bash scripts/deploy-azure.sh [--check | --repair-network | --check-config FILE | --audit-plan FILE]\nRun without flags for guided Central India deployment. --repair-network reviews recovery of an owned failed foundation. --audit-plan reads Terraform JSON from stdin.\n'
     exit 0 ;;
   --check-config) validate_config "${2:?Configuration path required}"; exit 0 ;;
   --audit-plan) CONFIG="${2:?Configuration path required}"; validate_config "$CONFIG"; audit_plan; exit 0 ;;
+  --repair-network) REPAIR_NETWORK=true ;;
   ''|--check) ;;
   *) fail 'Unknown argument; use --help.' ;;
 esac
@@ -175,7 +192,20 @@ STATE_GROUP="$(cfg state_group)"; STATE_ACCOUNT="$(cfg state_account)"; DEPLOY_I
 OPERATOR_IP="$(cfg operator_ip)"; PHASE="$(cfg phase)"
 az account set --subscription "$SUB"
 export ARM_SUBSCRIPTION_ID="$SUB" ARM_USE_CLI=true
-if [ "$(cfg revision)" != "$(git rev-parse HEAD)" ]; then
+if [ "$REPAIR_NETWORK" = true ]; then
+  [ "$PHASE" = 0 ] && [ "$(cfg bootstrap_complete)" = True ] && [ -s "$BOOT/terraform.tfstate" ] && [ -z "$(cfg image)" ] && [ -z "$(cfg execution)" ] || fail 'Network repair is restricted to a failed foundation with retained bootstrap state and no database/image/application stage.'
+  git merge-base --is-ancestor "$(cfg revision)" HEAD || fail 'The saved deployment commit is not an ancestor of this checkout.'
+  for group in "$GROUP" "$STATE_GROUP"; do
+    [ "$(az group show --name "$group" --query tags.fluxDeploymentId --output tsv)" = "$DEPLOY_ID" ] || fail 'Network repair requires both resource groups to belong to this deployment.'
+  done
+  TF="$WORK/network-repair"
+  [ ! -L "$TF" ] || fail 'The recovery working directory must not be a symlink.'
+  mkdir -p "$TF/tests"
+  cp "$ROOT"/infra/terraform/*.tf "$ROOT/infra/terraform/.terraform.lock.hcl" "$TF/"
+  cp "$ROOT"/infra/terraform/tests/*.tftest.hcl "$TF/tests/"
+  rm -f "$TF/network-recovery.import.tf"
+  printf 'Preparing a reviewed network repair. Existing state and resource names are retained; no deletion/replacement is permitted.\n'
+elif [ "$(cfg revision)" != "$(git rev-parse HEAD)" ]; then
   # A provider-registration interruption precedes any Terraform resources. Allow
   # a script fix only after proving that this checkpoint has no infrastructure.
   [ "$PHASE" = 0 ] && [ "$(cfg bootstrap_complete)" = False ] && [ ! -e "$BOOT/terraform.tfstate" ] && [ ! -e "$BOOT/terraform.tfstate.backup" ] || fail 'The checkout changed after infrastructure work began. Resume its original commit; no checkpoint will be discarded.'
@@ -200,6 +230,7 @@ for provider in Microsoft.App Microsoft.DBforPostgreSQL Microsoft.Network Micros
     provider_cli register "$provider"
     status="$(provider_cli show "$provider")"
   fi
+  if [ "$provider" = Microsoft.Network ] && [ "$status" = Registering ]; then wait_network_registration; fi
   case "$status" in
     Registered) printf '%s: Registered.\n' "$provider" ;;
     Registering) printf '%s: Registering; continuing without waiting for all Azure regions.\n' "$provider" ;;
@@ -283,6 +314,11 @@ terraform init -input=false -reconfigure \
 terraform fmt -check -recursive
 terraform validate
 terraform test
+if [ "$REPAIR_NETWORK" = true ]; then
+  terraform show -json | python3 "$ROOT/scripts/prepare-network-repair.py" state "$CONFIG" "$WORK/network-repair-addresses.json"
+  python3 "$ROOT/scripts/prepare-network-repair.py" imports "$CONFIG" "$TF/network-recovery.import.tf" "$WORK/network-repair-addresses.json"
+  terraform validate
+fi
 
 stage() {
   target="$1"; name="$2"
@@ -301,7 +337,12 @@ PY
   confirm "Apply this saved $name plan for $APP?" "APPLY-$APP"
   [ "$hash_before" = "$(shasum -a 256 "$plan" | cut -d' ' -f1)" ] || fail 'The saved plan changed after review.'
   terraform apply -input=false "$plan"
-  save phase "$target"
+  python3 - "$CONFIG" "$target" "$(git rev-parse HEAD)" "$REPAIR_NETWORK" <<'PY'
+import json,os,sys
+p,phase,revision,repair=sys.argv[1:]; d=json.load(open(p)); d['phase']=phase
+if repair=='true' and phase=='1': d['revision']=revision
+t=p+'.tmp'; open(t,'w').write(json.dumps(d,indent=2)+'\n'); os.chmod(t,0o600); os.replace(t,p)
+PY
 }
 
 stage 1 foundation

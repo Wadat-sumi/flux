@@ -23,6 +23,13 @@ resource "azurerm_subnet" "containers" {
   virtual_network_name = azurerm_virtual_network.backend[0].name
   address_prefixes     = ["10.88.0.0/23"]
   service_endpoints    = ["Microsoft.KeyVault"]
+  delegation {
+    name = "container-apps"
+    service_delegation {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
 }
 data "azurerm_client_config" "backend" {
   count = var.enable_backend ? 1 : 0
@@ -78,6 +85,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "database" {
   private_dns_zone_name = azurerm_private_dns_zone.database[0].name
   resource_group_name   = azurerm_resource_group.flux.name
   virtual_network_id    = azurerm_virtual_network.backend[0].id
+  tags                  = merge(local.backend_tags, var.deployment_id == null ? {} : { fluxDeploymentId = var.deployment_id })
 }
 resource "azurerm_postgresql_flexible_server" "backend" {
   count                         = local.database_enabled ? 1 : 0
@@ -133,7 +141,7 @@ resource "azurerm_container_app_environment" "backend" {
   resource_group_name        = azurerm_resource_group.flux.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.backend[0].id
   infrastructure_subnet_id   = azurerm_subnet.containers[0].id
-  tags                       = local.backend_tags
+  tags                       = merge(local.backend_tags, var.deployment_id == null ? {} : { fluxDeploymentId = var.deployment_id })
 }
 resource "azurerm_container_app_job" "migrate" {
   count                        = local.image_enabled ? 1 : 0
